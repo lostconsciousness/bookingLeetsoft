@@ -1,154 +1,42 @@
-import { RefreshCw } from "lucide-react";
+import { ArrowRight, Clock3, RefreshCw, Sparkles, TrendingUp } from "lucide-react";
+import { Link } from "react-router-dom";
 import { StatCard } from "../components/StatCard";
 import { Toolbar } from "../components/Toolbar";
 import { money, time } from "../lib/api";
 import { useDemo } from "./useDemo";
 
-function shortDay(value: string) {
-  return new Intl.DateTimeFormat(undefined, { weekday: "short", day: "2-digit" }).format(new Date(`${value}T12:00:00`));
-}
-
-function SavingsChart({ data }: { data: { date: string; amount: number }[] }) {
+function ImpactChart({ data }: { data: { date: string; amount: number }[] }) {
   const max = Math.max(1, ...data.map((item) => item.amount));
-  return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-950">Saved money by day</h3>
-          <p className="text-sm text-slate-500">Accepted moves only</p>
-        </div>
-      </div>
-      <div className="mt-6 flex h-56 items-end gap-3 border-b border-l border-slate-200 px-3 pb-3">
-        {data.map((item) => (
-          <div key={item.date} className="flex h-full min-w-0 flex-1 flex-col justify-end gap-2">
-            <div className="text-center text-xs font-semibold text-slate-500">{money(item.amount)}</div>
-            <div className="mx-auto w-full max-w-12 rounded-t-md bg-accent-600" style={{ height: `${Math.max(6, (item.amount / max) * 150)}px` }} />
-            <div className="truncate text-center text-xs text-slate-400">{shortDay(item.date)}</div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function OfferPie({ accepted, declined, sent, expired }: { accepted: number; declined: number; sent: number; expired: number }) {
-  const total = Math.max(1, accepted + declined + sent + expired);
-  const acceptedEnd = (accepted / total) * 100;
-  const declinedEnd = acceptedEnd + (declined / total) * 100;
-  const sentEnd = declinedEnd + (sent / total) * 100;
-  const background = `conic-gradient(#24958c 0 ${acceptedEnd}%, #f59e0b ${acceptedEnd}% ${declinedEnd}%, #64748b ${declinedEnd}% ${sentEnd}%, #cbd5e1 ${sentEnd}% 100%)`;
-  const rows = [
-    { label: "Accepted", value: accepted, color: "bg-accent-600" },
-    { label: "Declined", value: declined, color: "bg-amber-500" },
-    { label: "Sent", value: sent, color: "bg-slate-500" },
-    { label: "Expired", value: expired, color: "bg-slate-300" },
-  ];
-
-  return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-      <h3 className="text-lg font-semibold text-slate-950">Offer outcome mix</h3>
-      <p className="text-sm text-slate-500">How generated offers are converting</p>
-      <div className="mt-6 grid items-center gap-6 sm:grid-cols-[180px_1fr]">
-        <div className="relative mx-auto h-40 w-40 rounded-full" style={{ background }}>
-          <div className="absolute inset-8 grid place-items-center rounded-full bg-white text-center">
-            <span className="text-2xl font-semibold text-slate-950">{accepted + declined + sent + expired}</span>
-            <span className="text-xs text-slate-500">offers</span>
-          </div>
-        </div>
-        <div className="space-y-3">
-          {rows.map((row) => (
-            <div key={row.label} className="flex items-center justify-between gap-3 text-sm">
-              <span className="inline-flex items-center gap-2 text-slate-600">
-                <span className={`h-3 w-3 rounded-sm ${row.color}`} />
-                {row.label}
-              </span>
-              <span className="font-semibold text-slate-950">{row.value}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
+  return <section className="surface p-6"><div className="flex items-start justify-between"><div><p className="eyebrow">Proof of impact</p><h3 className="mt-2 text-xl font-semibold text-slate-950">Recovered value</h3></div><span className="rounded-full bg-accent-50 px-3 py-1 text-xs font-semibold text-accent-700">Accepted moves</span></div><div className="mt-8 flex h-48 items-end gap-3">{data.map((item) => <div key={item.date} className="group flex h-full min-w-0 flex-1 flex-col justify-end gap-2"><span className="text-center text-xs font-semibold text-slate-500 opacity-0 transition group-hover:opacity-100">{money(item.amount)}</span><div className="mx-auto w-full max-w-14 rounded-t-lg bg-gradient-to-t from-accent-700 to-accent-300" style={{height:`${Math.max(8,(item.amount/max)*145)}px`}}/><span className="truncate text-center text-[11px] text-slate-400">{new Intl.DateTimeFormat(undefined,{weekday:"short"}).format(new Date(`${item.date}T12:00:00`))}</span></div>)}</div></section>;
 }
 
 export default function Dashboard() {
   const demo = useDemo();
-  const metrics = demo.schedule?.metrics;
-  const dailySavings = metrics?.dailySavings ?? [];
+  const m = demo.schedule?.metrics;
+  const candidate = demo.schedule?.candidates[0];
+  const accepted = m?.acceptedOffers ?? 0;
+  const totalDecided = accepted + (m?.declinedOffers ?? 0);
+  const acceptance = totalDecided ? Math.round((accepted / totalDecided) * 100) : 0;
+  const utilization = m?.staffUtilizationPercent ?? 0;
+  const uplift = m?.detectedIdleMinutes ? Math.min(18, Math.round((m.detectedIdleMinutes / 480) * 100)) : 0;
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-accent-600">Demo overview</p>
-          <h2 className="mt-1 text-3xl font-semibold text-slate-950">Today&apos;s schedule health</h2>
-        </div>
-        <button onClick={() => demo.refresh()} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </button>
-      </div>
-      <Toolbar
-        businesses={demo.businesses}
-        staff={demo.schedule?.staff ?? []}
-        businessId={demo.businessId}
-        staffId={demo.staffId}
-        date={demo.date}
-        onBusiness={(value) => {
-          demo.setBusinessId(value);
-          demo.refresh(value, demo.date, undefined);
-        }}
-        onStaff={(value) => {
-          demo.setStaffId(value);
-          demo.refresh(demo.businessId, demo.date, value);
-        }}
-        onDate={(value) => {
-          demo.setDate(value);
-          demo.refresh(demo.businessId, value, demo.staffId);
-        }}
-        onSeed={demo.seed}
-      />
-      {demo.error ? <div className="rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{demo.error}</div> : null}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Bookings today" value={metrics?.totalBookingsToday ?? 0} />
-        <StatCard label="Idle minutes detected" value={metrics?.detectedIdleMinutes ?? 0} />
-        <StatCard label="Potential saved cost" value={money(metrics?.estimatedSavedCost)} hint="If all current suggestions are accepted" />
-        <StatCard label="Actual saved cost" value={money(metrics?.actualSavedCost)} hint="Accepted offers only" />
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <SavingsChart data={dailySavings} />
-        <OfferPie
-          accepted={metrics?.acceptedOffers ?? 0}
-          declined={metrics?.declinedOffers ?? 0}
-          sent={metrics?.sentOffers ?? 0}
-          expired={metrics?.expiredOffers ?? 0}
-        />
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-          <h3 className="text-lg font-semibold text-slate-950">Generated offers</h3>
-          <div className="mt-4 grid gap-3 sm:grid-cols-4">
-            <StatCard label="All" value={metrics?.generatedOffers ?? 0} />
-            <StatCard label="Accepted" value={metrics?.acceptedOffers ?? 0} />
-            <StatCard label="Declined" value={metrics?.declinedOffers ?? 0} />
-            <StatCard label="Sent" value={metrics?.sentOffers ?? 0} />
-          </div>
-        </section>
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-          <h3 className="text-lg font-semibold text-slate-950">Next suggested move</h3>
-          {demo.schedule?.candidates[0] ? (
-            <div className="mt-4 rounded-lg bg-accent-50 p-4">
-              <p className="text-sm font-semibold text-accent-700">
-                {demo.schedule.candidates[0].customer_name} from {time(demo.schedule.candidates[0].old_start)} to {time(demo.schedule.candidates[0].suggested_start)}
-              </p>
-              <p className="mt-2 text-sm text-slate-600">{demo.schedule.candidates[0].reason}</p>
-            </div>
-          ) : (
-            <p className="mt-4 text-sm text-slate-500">{demo.loading ? "Loading..." : "No eligible move right now."}</p>
-          )}
-        </section>
-      </div>
+  return <div className="space-y-6">
+    <section className="overflow-hidden rounded-3xl bg-accent-900 text-white shadow-lift"><div className="grid gap-8 px-6 py-8 sm:px-9 lg:grid-cols-[1fr_auto] lg:items-end lg:px-10 lg:py-10"><div><p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-200">Revenue intelligence for every appointment</p><h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">Turn quiet hours into<br/><span className="text-emerald-300">productive schedules.</span></h1><p className="mt-5 max-w-2xl text-base leading-7 text-emerald-50/70">Leetsoft Booking finds recoverable gaps, identifies the right customer to move, and orchestrates a low-friction offer in seconds.</p></div><Link to="/optimizer" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-accent-900 shadow-lg hover:-translate-y-0.5">Optimize today <ArrowRight className="h-4 w-4"/></Link></div></section>
+
+    <Toolbar businesses={demo.businesses} staff={demo.schedule?.staff ?? []} businessId={demo.businessId} staffId={demo.staffId} date={demo.date} onBusiness={(v)=>demo.refresh(v,demo.date,undefined)} onStaff={(v)=>demo.refresh(demo.businessId,demo.date,v)} onDate={(v)=>demo.refresh(demo.businessId,v,demo.staffId)} onSeed={demo.seed}/>
+    {demo.error ? <div className="surface border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"><strong>We could not load the demo.</strong> {demo.error} <button onClick={()=>demo.refresh()} className="ml-2 underline">Try again</button></div> : null}
+
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <StatCard label="Schedule utilization" value={`${utilization}%`} hint={`Up to +${uplift} pts available`} tone="positive"/>
+      <StatCard label="Recoverable idle time" value={`${m?.detectedIdleMinutes ?? 0} min`} hint="Detected across today's team" tone="warning"/>
+      <StatCard label="Projected value" value={money(m?.estimatedSavedCost)} hint="If current recommendations convert"/>
+      <StatCard label="Offer acceptance" value={`${acceptance}%`} hint={`${accepted} accepted of ${totalDecided} decided`}/>
     </div>
-  );
-}
 
+    <div className="grid gap-6 xl:grid-cols-[1.2fr_.8fr]">
+      <ImpactChart data={m?.dailySavings ?? []}/>
+      <section className="surface p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">Best next action</p><h3 className="mt-2 text-xl font-semibold">Close the highest-value gap</h3></div><div className="grid h-11 w-11 place-items-center rounded-xl bg-accent-50 text-accent-700"><Sparkles className="h-5 w-5"/></div></div>{candidate ? <><div className="mt-6 rounded-2xl border border-accent-100 bg-accent-50/70 p-5"><div className="flex items-start justify-between gap-4"><div><p className="font-semibold text-slate-950">{candidate.customer_name}</p><p className="mt-1 text-sm text-slate-500">{candidate.service_name}</p></div><span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-accent-700">{money(candidate.estimated_saved_cost)} impact</span></div><div className="mt-5 flex items-center gap-3 text-sm"><span className="rounded-lg bg-white px-3 py-2 text-slate-500">{time(candidate.old_start)}</span><ArrowRight className="h-4 w-4 text-accent-600"/><span className="rounded-lg bg-accent-600 px-3 py-2 font-semibold text-white">{time(candidate.suggested_start)}</span></div><p className="mt-4 text-sm leading-6 text-slate-600">{candidate.reason}</p></div><Link to="/optimizer" className="primary-button mt-4 w-full">Review recommendation <ArrowRight className="h-4 w-4"/></Link></> : <div className="mt-6 rounded-2xl bg-slate-50 p-6 text-center"><Clock3 className="mx-auto h-6 w-6 text-slate-400"/><p className="mt-3 font-semibold">Schedule fully optimized</p><p className="mt-1 text-sm text-slate-500">Reset the demo to replay the investor flow.</p></div>}</section>
+    </div>
+    <section className="grid gap-4 md:grid-cols-3"><div className="surface p-5"><TrendingUp className="h-5 w-5 text-accent-600"/><p className="mt-4 font-semibold">Detect</p><p className="mt-1 text-sm leading-6 text-slate-500">Find costly gaps across every staff calendar.</p></div><div className="surface p-5"><Sparkles className="h-5 w-5 text-accent-600"/><p className="mt-4 font-semibold">Recommend</p><p className="mt-1 text-sm leading-6 text-slate-500">Match the right flexible customer and incentive.</p></div><div className="surface p-5"><RefreshCw className="h-5 w-5 text-accent-600"/><p className="mt-4 font-semibold">Recover</p><p className="mt-1 text-sm leading-6 text-slate-500">Confirm the move and update the schedule instantly.</p></div></section>
+  </div>;
+}

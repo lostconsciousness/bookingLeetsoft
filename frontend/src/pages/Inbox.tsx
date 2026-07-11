@@ -10,11 +10,14 @@ export default function Inbox() {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [customerId, setCustomerId] = useState<number | undefined>();
   const [channel, setChannel] = useState("whatsapp");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   async function load() {
-    const [messageRows, offerRows] = await Promise.all([api.messages(customerId), api.offers()]);
-    setMessages(messageRows);
-    setOffers(offerRows);
+    setLoading(true); setError("");
+    try { const [messageRows, offerRows] = await Promise.all([api.messages(customerId), api.offers()]); setMessages(messageRows); setOffers(offerRows); }
+    catch { setError("Customer simulation is temporarily unavailable."); }
+    finally { setLoading(false); }
   }
 
   useEffect(() => {
@@ -33,26 +36,27 @@ export default function Inbox() {
   const previewText = latestOffer?.message_text ?? latestMessage?.body ?? "Generate an offer to see the customer preview.";
 
   async function action(kind: "accept" | "decline") {
-    if (!latestOffer) return;
-    if (kind === "accept") await api.acceptOffer(latestOffer.token);
-    if (kind === "decline") await api.declineOffer(latestOffer.token);
-    await load();
+    if (!latestOffer || latestOffer.status !== "sent") return;
+    try { if (kind === "accept") await api.acceptOffer(latestOffer.token); if (kind === "decline") await api.declineOffer(latestOffer.token); await load(); }
+    catch { setError("The simulated response could not be saved. Refresh and try again."); }
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-accent-600">Customer Inbox Simulator</p>
-          <h2 className="mt-1 text-3xl font-semibold text-slate-950">Mock customer communication</h2>
+          <p className="eyebrow">Customer experience</p>
+          <h2 className="page-title">See the offer through their eyes</h2>
+          <p className="mt-3 text-sm text-slate-500">A safe simulation of each customer touchpoint. No real message is sent.</p>
         </div>
         <button onClick={load} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
           <RefreshCw className="h-4 w-4" />
           Refresh
         </button>
       </div>
+      {error ? <div className="surface border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div> : null}
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-        <aside className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
+        <aside className="surface p-4">
           <button onClick={() => setCustomerId(undefined)} className="mb-2 w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50">
             All customers
           </button>
@@ -76,8 +80,8 @@ export default function Inbox() {
           </div>
           <ChannelPreview channel={channel} message={previewText} />
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => action("accept")} className="rounded-md bg-accent-600 px-4 py-2 text-sm font-semibold text-white">Accept in simulator</button>
-            <button onClick={() => action("decline")} className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Decline in simulator</button>
+            <button disabled={loading || latestOffer?.status !== "sent"} onClick={() => action("accept")} className="primary-button">Accept in simulator</button>
+            <button disabled={loading || latestOffer?.status !== "sent"} onClick={() => action("decline")} className="secondary-button">Decline in simulator</button>
             {latestOffer?.public_url ? (
               <a href={latestOffer.public_url} target="_blank" className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
                 <ExternalLink className="h-4 w-4" />
@@ -90,4 +94,3 @@ export default function Inbox() {
     </div>
   );
 }
-

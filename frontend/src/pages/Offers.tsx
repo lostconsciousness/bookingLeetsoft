@@ -4,9 +4,12 @@ import { api, Offer, time } from "../lib/api";
 
 export default function Offers() {
   const [offers, setOffers] = useState<Offer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   async function load() {
-    setOffers(await api.offers());
+    setLoading(true); setError("");
+    try { setOffers(await api.offers()); } catch { setError("Offer activity could not be loaded."); } finally { setLoading(false); }
   }
 
   useEffect(() => {
@@ -17,17 +20,18 @@ export default function Offers() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-accent-600">Offers</p>
-          <h2 className="mt-1 text-3xl font-semibold text-slate-950">Generated rescheduling offers</h2>
+          <p className="eyebrow">Offer lifecycle</p>
+          <h2 className="page-title">Every recovery opportunity, tracked</h2>
         </div>
         <button onClick={load} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
           <RefreshCw className="h-4 w-4" />
           Refresh
         </button>
       </div>
+      {error ? <div className="surface border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div> : null}
       <div className="grid gap-4">
         {offers.map((offer) => (
-          <article key={offer.id} className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+          <article key={offer.id} className="surface p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-lg font-semibold text-slate-950">{offer.customer_name}</p>
@@ -54,9 +58,9 @@ export default function Offers() {
             </div>
           </article>
         ))}
-        {!offers.length ? <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">No offers yet. Generate one in the optimizer.</div> : null}
+        {!offers.length && !loading ? <div className="surface border-dashed p-8 text-center text-sm text-slate-500">No offers yet. Generate one in the optimizer.</div> : null}
+        {loading ? <div className="surface p-8 text-center text-sm text-slate-500">Loading offer activity…</div> : null}
       </div>
     </div>
   );
 }
-

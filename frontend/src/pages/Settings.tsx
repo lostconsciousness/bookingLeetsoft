@@ -23,10 +23,11 @@ export default function Settings() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-sm font-semibold uppercase tracking-wide text-accent-600">Settings</p>
-        <h2 className="mt-1 text-3xl font-semibold text-slate-950">Optimization policy</h2>
+        <p className="eyebrow">Decision policy</p>
+        <h2 className="page-title">Control how Leetsoft optimizes</h2>
+        <p className="mt-3 text-sm text-slate-500">Transparent guardrails keep every recommendation aligned with the business.</p>
       </div>
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+      <section className="surface p-5">
         {settings ? (
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Min gap minutes" value={settings.minGapMinutesToOptimize} onChange={(value) => update("minGapMinutesToOptimize", Number(value))} />
@@ -40,7 +41,7 @@ export default function Settings() {
         ) : (
           <p className="text-sm text-slate-500">Loading settings...</p>
         )}
-        <button onClick={save} className="mt-5 inline-flex items-center gap-2 rounded-md bg-accent-600 px-4 py-2 text-sm font-semibold text-white">
+        <button disabled={!settings} onClick={save} className="primary-button mt-5">
           <Save className="h-4 w-4" />
           Save settings
         </button>
@@ -57,4 +58,3 @@ function Field({ label, value, onChange }: { label: string; value: string | numb
     </label>
   );
 }
-

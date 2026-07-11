@@ -104,15 +104,16 @@ export default function SmartBooking() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-accent-600">Smart Booking</p>
-          <h2 className="mt-1 text-3xl font-semibold text-slate-950">Dynamic slot quote</h2>
+          <p className="eyebrow">Demand-aware booking</p>
+          <h2 className="page-title">Price every slot with purpose</h2>
+          <p className="mt-3 text-sm text-slate-500">Guide new demand toward the hours that improve utilization.</p>
         </div>
         <button onClick={() => demo.refresh(demo.businessId, demo.date, staffId)} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
           <RefreshCw className="h-4 w-4" />
           Refresh schedule
         </button>
       </div>
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+      <section className="surface p-5">
         <div className="grid gap-3 lg:grid-cols-6">
           <label className="grid gap-1 text-sm font-medium text-slate-600">
             Business
@@ -184,7 +185,7 @@ export default function SmartBooking() {
             Requested start
             <input type="datetime-local" value={requestedStart} onChange={(event) => setRequestedStart(event.target.value)} className="rounded-md border border-slate-300 px-3 py-2" />
           </label>
-          <button onClick={() => getQuote()} className="mt-6 inline-flex items-center justify-center gap-2 rounded-md bg-accent-600 px-4 py-2 text-sm font-semibold text-white">
+          <button onClick={() => getQuote()} className="primary-button mt-6">
             <Sparkles className="h-4 w-4" />
             Quote slot
           </button>
@@ -203,7 +204,7 @@ export default function SmartBooking() {
           <button
             key={card.label}
             onClick={() => chooseSlot(card.time)}
-            className={`rounded-lg border p-5 text-left shadow-soft ${card.time ? "border-slate-200 bg-white hover:border-accent-300" : "border-slate-200 bg-slate-50 text-slate-400"}`}
+            className={`rounded-2xl border p-5 text-left shadow-soft ${card.time ? "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-accent-300" : "border-slate-200 bg-slate-50 text-slate-400"}`}
           >
             <p className="font-semibold text-slate-950">{card.label}</p>
             <p className="mt-2 text-2xl font-semibold text-accent-700">{card.time ?? "No fit"}</p>
@@ -214,4 +215,3 @@ export default function SmartBooking() {
     </div>
   );
 }
-

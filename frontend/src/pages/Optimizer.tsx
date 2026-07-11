@@ -156,9 +156,16 @@ export default function Optimizer() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-wide text-accent-600">Schedule Optimizer</p>
-        <h2 className="mt-1 text-3xl font-semibold text-slate-950">Find the gap, suggest the move, send the mock offer</h2>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="eyebrow">Optimization workspace</p>
+          <h2 className="page-title">Recover today&apos;s hidden capacity</h2>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">Review the highest-impact move, choose a simulated channel, and watch the schedule improve.</p>
+        </div>
+        <span className="rounded-full border border-accent-200 bg-accent-50 px-3 py-1.5 text-xs font-semibold text-accent-700">Live recommendation engine</span>
+      </div>
+      <div className="surface grid overflow-hidden sm:grid-cols-4">
+        {["Detect gap", "Match customer", "Send offer", "Recover value"].map((step, index) => <div key={step} className={`flex items-center gap-3 border-slate-200 px-4 py-4 sm:border-r ${index <= 1 ? "bg-accent-50/50" : ""}`}><span className={`grid h-7 w-7 place-items-center rounded-full text-xs font-bold ${index <= 1 ? "bg-accent-600 text-white" : "bg-slate-100 text-slate-500"}`}>{index + 1}</span><span className="text-sm font-semibold text-slate-700">{step}</span></div>)}
       </div>
       <Toolbar
         businesses={demo.businesses}
@@ -181,7 +188,7 @@ export default function Optimizer() {
         onSeed={demo.seed}
       />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+        <section className="surface p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-semibold text-slate-950">{demo.schedule?.business.name ?? "Loading schedule"}</h3>
@@ -218,8 +225,9 @@ export default function Optimizer() {
           </div>
         </section>
         <aside className="space-y-4">
-          <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-            <h3 className="text-lg font-semibold text-slate-950">Suggested move</h3>
+          <section className="surface p-5">
+            <p className="eyebrow">Recommended action</p>
+            <h3 className="mt-2 text-lg font-semibold text-slate-950">Suggested move</h3>
             {candidates.length > 1 ? (
               <div className="mt-4 space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Available moves</p>
@@ -263,7 +271,7 @@ export default function Optimizer() {
                   </select>
                 </label>
                 <div className="grid gap-2">
-                  <button onClick={generateOffer} className="inline-flex items-center justify-center gap-2 rounded-md bg-accent-600 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-700">
+                  <button onClick={generateOffer} className="primary-button">
                     <Send className="h-4 w-4" />
                     Generate offer
                   </button>
@@ -281,9 +289,7 @@ export default function Optimizer() {
             ) : (
               <div className="mt-4 space-y-3">
                 <p className="text-sm text-slate-500">No eligible candidate found for this filter.</p>
-                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                  If Max still shows Sofia as a 30-minute booking, your database is using old seed data. Press Reset demo data once, then refresh.
-                </div>
+                <div className="rounded-xl border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">This schedule has no eligible moves. Reset the investor demo to replay the optimization journey.</div>
               </div>
             )}
           </section>
@@ -293,4 +299,3 @@ export default function Optimizer() {
     </div>
   );
 }
-

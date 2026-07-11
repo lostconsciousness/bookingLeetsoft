@@ -4,18 +4,21 @@ export default {
     extend: {
       colors: {
         accent: {
-          50: "#eef8f7",
-          100: "#d6eeec",
-          500: "#24958c",
-          600: "#1d7771",
-          700: "#185f5b"
+          50: "#effdf8",
+          100: "#d7f8eb",
+          200: "#b2eed9",
+          300: "#78dec1",
+          500: "#16a879",
+          600: "#087e5d",
+          700: "#07664e",
+          900: "#064334"
         }
       },
       boxShadow: {
-        soft: "0 10px 30px rgba(24, 95, 91, 0.08)"
+        soft: "0 12px 35px rgba(15, 23, 42, 0.06)",
+        lift: "0 24px 70px rgba(5, 66, 51, 0.14)"
       }
     }
   },
   plugins: []
 };
-

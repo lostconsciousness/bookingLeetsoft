@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete
@@ -47,7 +47,7 @@ async def reset_demo_data(session: AsyncSession) -> None:
 
 async def seed_demo_data(session: AsyncSession) -> None:
     await reset_demo_data(session)
-    today = date.today()
+    today = datetime.now(ZoneInfo("Europe/Vienna")).date()
 
     salon = Business(name="Urban Cut Studio", type="hair_salon", timezone="Europe/Vienna", currency="EUR")
     auto = Business(name="FastFix Auto", type="auto_service", timezone="Europe/Vienna", currency="EUR")
@@ -118,8 +118,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
         for weekday in range(7):
             session.add(WorkingHours(business_id=staff.business_id, staff_member_id=staff.id, weekday=weekday, start_time="08:00", end_time="18:00"))
 
-    session.add_all(
-        [
+    current_bookings = [
             Booking(business_id=salon.id, staff_member_id=anna.id, service_id=haircut.id, customer_id=lukas.id, start_at=at(today, 12), end_at=at(today, 13)),
             Booking(business_id=salon.id, staff_member_id=anna.id, service_id=haircut.id, customer_id=maria.id, start_at=at(today, 15), end_at=at(today, 16)),
             Booking(business_id=salon.id, staff_member_id=max_barber.id, service_id=haircut.id, customer_id=sofia.id, start_at=at(today, 10), end_at=at(today, 11)),
@@ -127,7 +126,29 @@ async def seed_demo_data(session: AsyncSession) -> None:
             Booking(business_id=auto.id, staff_member_id=markus.id, service_id=diagnostics.id, customer_id=daniel.id, start_at=at(today, 8, 30), end_at=at(today, 9, 30)),
             Booking(business_id=auto.id, staff_member_id=markus.id, service_id=oil.id, customer_id=peter.id, start_at=at(today, 13), end_at=at(today, 13, 45)),
             Booking(business_id=auto.id, staff_member_id=markus.id, service_id=brakes.id, customer_id=daniel.id, start_at=at(today, 15, 30), end_at=at(today, 17)),
-        ]
-    )
-    await session.commit()
+    ]
+    session.add_all(current_bookings)
+    await session.flush()
 
+    # A small, deterministic history makes the value story visible immediately
+    # without affecting today's optimization candidates.
+    historical_bookings = []
+    for days_ago, customer, start_hour in [(2, maria, 13), (4, lukas, 14), (6, sofia, 15)]:
+        day = today - timedelta(days=days_ago)
+        historical_bookings.append(
+            Booking(business_id=salon.id, staff_member_id=anna.id, service_id=haircut.id, customer_id=customer.id, start_at=at(day, start_hour - 1), end_at=at(day, start_hour))
+        )
+    session.add_all(historical_bookings)
+    await session.flush()
+    for index, booking in enumerate(historical_bookings):
+        session.add(
+            RescheduleOffer(
+                token=f"demo-history-{index}", booking_id=booking.id, customer_id=booking.customer_id, business_id=salon.id,
+                old_start=booking.start_at + timedelta(hours=1), old_end=booking.end_at + timedelta(hours=1),
+                suggested_start=booking.start_at, suggested_end=booking.end_at,
+                incentive_type="discount", incentive_value="10", message_text="Demo history: earlier appointment accepted.",
+                status="accepted" if index < 2 else "declined", channel="whatsapp",
+                expires_at=booking.start_at + timedelta(hours=8), created_at=booking.start_at - timedelta(days=1),
+            )
+        )
+    await session.commit()

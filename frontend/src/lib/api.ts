@@ -106,6 +106,22 @@ export type Offer = {
   public_url?: string;
 };
 
+export type PublicOffer = {
+  id: number;
+  token: string;
+  business_name: string;
+  service_name: string;
+  customer_name: string;
+  current_start: string;
+  current_end: string;
+  suggested_start: string;
+  suggested_end: string;
+  incentive_type: string;
+  incentive_value: string;
+  status: "sent" | "accepted" | "declined" | "expired";
+  message_text: string;
+};
+
 export type Message = {
   id: number;
   business_id: number;
@@ -164,9 +180,9 @@ export const api = {
       body: JSON.stringify({ businessId, date, staffId, bookingId, channel }),
     }),
   messages: (customerId?: number) => request<Message[]>(`/api/messages${customerId ? `?customerId=${customerId}` : ""}`),
-  publicOffer: (token: string) => request<any>(`/api/public/offers/${token}`),
-  acceptOffer: (token: string) => request<any>(`/api/public/offers/${token}/accept`, { method: "POST" }),
-  declineOffer: (token: string) => request<any>(`/api/public/offers/${token}/decline`, { method: "POST" }),
+  publicOffer: (token: string) => request<PublicOffer>(`/api/public/offers/${token}`),
+  acceptOffer: (token: string) => request<PublicOffer>(`/api/public/offers/${token}/accept`, { method: "POST" }),
+  declineOffer: (token: string) => request<PublicOffer>(`/api/public/offers/${token}/decline`, { method: "POST" }),
   quote: (payload: { businessId: number; serviceId: number; staffId?: number; requestedStart: string }) =>
     request<Quote>("/api/smart-pricing/quote", { method: "POST", body: JSON.stringify(payload) }),
   settings: (businessId: number) => request<Settings>(`/api/settings/${businessId}`),
@@ -185,4 +201,3 @@ export function money(value: number | undefined | null) {
 export function dateTimeLocal(day: string, hour = "09:00") {
   return `${day}T${hour}`;
 }
-
