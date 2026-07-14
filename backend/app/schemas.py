@@ -70,6 +70,7 @@ class GapOut(BaseModel):
 
 class CandidateOut(BaseModel):
     booking_id: int
+    customer_id: int
     customer_name: str
     service_name: str
     old_start: datetime
@@ -88,6 +89,7 @@ class GenerateOfferIn(BaseModel):
     date: str
     staff_id: int | None = Field(default=None, alias="staffId")
     booking_id: int | None = Field(default=None, alias="bookingId")
+    suggested_start: datetime | None = Field(default=None, alias="suggestedStart")
     channel: str = "whatsapp"
 
 
@@ -95,6 +97,7 @@ class OfferOut(BaseModel):
     id: int
     token: str
     booking_id: int
+    staff_member_id: int
     customer_id: int
     business_id: int
     old_start: datetime
@@ -192,4 +195,3 @@ class ScheduleOut(BaseModel):
     gaps: list[GapOut]
     candidates: list[CandidateOut]
     metrics: dict[str, Any]
-

@@ -71,6 +71,12 @@ def generate_candidates(
                     reason=reason,
                 )
             )
-            break
-    return candidates
-
+    return sorted(
+        candidates,
+        key=lambda candidate: (
+            -candidate.estimated_saved_cost,
+            candidate.suggested_start,
+            candidate.booking.start_at,
+            candidate.booking.booking_id,
+        ),
+    )

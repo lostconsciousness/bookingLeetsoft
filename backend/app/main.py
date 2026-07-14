@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -156,6 +156,7 @@ def booking_out(booking: Booking) -> BookingOut:
 def candidate_out(candidate: CandidateResult) -> CandidateOut:
     return CandidateOut(
         booking_id=candidate.booking.booking_id,
+        customer_id=candidate.booking.customer_id,
         customer_name=candidate.booking.customer_name,
         service_name=candidate.booking.service_name,
         old_start=candidate.booking.start_at,
@@ -194,6 +195,7 @@ def offer_out(offer: RescheduleOffer) -> OfferOut:
         id=offer.id,
         token=offer.token,
         booking_id=offer.booking_id,
+        staff_member_id=offer.booking.staff_member_id,
         customer_id=offer.customer_id,
         business_id=offer.business_id,
         old_start=offer.old_start,
@@ -346,6 +348,8 @@ async def generate_offer(payload: GenerateOfferIn, session: AsyncSession = Depen
     _, candidates_rows, _ = await compute_candidates(session, payload.business_id, payload.date, payload.staff_id)
     if payload.booking_id:
         candidates_rows = [row for row in candidates_rows if row.booking.booking_id == payload.booking_id]
+    if payload.suggested_start:
+        candidates_rows = [row for row in candidates_rows if row.suggested_start == payload.suggested_start]
     if not candidates_rows:
         raise HTTPException(status_code=400, detail="No eligible rescheduling candidate found")
     candidate = candidates_rows[0]
@@ -393,7 +397,7 @@ async def generate_offer(payload: GenerateOfferIn, session: AsyncSession = Depen
         message_text=message,
         status=OfferStatus.sent.value,
         channel=payload.channel,
-        expires_at=datetime.utcnow() + timedelta(hours=8),
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=8),
     )
     session.add(offer)
     await session.flush()
@@ -416,6 +420,12 @@ async def offers(session: AsyncSession = Depends(get_session)) -> list[OfferOut]
             .order_by(RescheduleOffer.created_at.desc())
         )
     ).all()
+    expired = False
+    for row in rows:
+        if expire_if_needed(row):
+            expired = True
+    if expired:
+        await session.commit()
     return [offer_out(row) for row in rows]
 
 
@@ -428,31 +438,46 @@ async def offer_detail(offer_id: int, session: AsyncSession = Depends(get_sessio
     )
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
+    if expire_if_needed(offer):
+        await session.commit()
     return offer_out(offer)
 
 
-async def public_offer_by_token(session: AsyncSession, token: str) -> RescheduleOffer:
-    offer = await session.scalar(
+async def public_offer_by_token(session: AsyncSession, token: str, *, for_update: bool = False) -> RescheduleOffer:
+    stmt = (
         select(RescheduleOffer)
         .options(selectinload(RescheduleOffer.booking).selectinload(Booking.service), selectinload(RescheduleOffer.customer), selectinload(RescheduleOffer.business))
         .where(RescheduleOffer.token == token)
     )
+    if for_update:
+        stmt = stmt.with_for_update()
+    offer = await session.scalar(stmt)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     return offer
 
 
-@app.get("/api/public/offers/{token}", response_model=PublicOfferOut)
-async def public_offer(token: str, session: AsyncSession = Depends(get_session)) -> PublicOfferOut:
-    offer = await public_offer_by_token(session, token)
+def expires_at_utc(offer: RescheduleOffer) -> datetime:
+    value = offer.expires_at
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def expire_if_needed(offer: RescheduleOffer) -> bool:
+    if offer.status == OfferStatus.sent.value and expires_at_utc(offer) <= datetime.now(timezone.utc):
+        offer.status = OfferStatus.expired.value
+        return True
+    return False
+
+
+def public_offer_out(offer: RescheduleOffer) -> PublicOfferOut:
     return PublicOfferOut(
         id=offer.id,
         token=offer.token,
         business_name=offer.business.name,
         service_name=offer.booking.service.name,
         customer_name=offer.customer.name,
-        current_start=offer.booking.start_at,
-        current_end=offer.booking.end_at,
+        current_start=offer.old_start,
+        current_end=offer.old_end,
         suggested_start=offer.suggested_start,
         suggested_end=offer.suggested_end,
         incentive_type=offer.incentive_type,
@@ -462,11 +487,24 @@ async def public_offer(token: str, session: AsyncSession = Depends(get_session))
     )
 
 
+@app.get("/api/public/offers/{token}", response_model=PublicOfferOut)
+async def public_offer(token: str, session: AsyncSession = Depends(get_session)) -> PublicOfferOut:
+    offer = await public_offer_by_token(session, token)
+    if expire_if_needed(offer):
+        await session.commit()
+    return public_offer_out(offer)
+
+
 @app.post("/api/public/offers/{token}/accept", response_model=PublicOfferOut)
 async def accept_offer(token: str, session: AsyncSession = Depends(get_session)) -> PublicOfferOut:
-    offer = await public_offer_by_token(session, token)
+    offer = await public_offer_by_token(session, token, for_update=True)
+    if offer.status == OfferStatus.accepted.value:
+        return public_offer_out(offer)
     if offer.status != OfferStatus.sent.value:
-        raise HTTPException(status_code=400, detail="Offer is no longer active")
+        raise HTTPException(status_code=409, detail=f"Offer is already {offer.status}")
+    if expire_if_needed(offer):
+        await session.commit()
+        raise HTTPException(status_code=409, detail="Offer has expired")
     provider = MockBookingProviderAdapter(session)
     available = await provider.check_availability(offer.booking.staff_member_id, offer.suggested_start, offer.suggested_end, offer.booking_id)
     if not available:
@@ -481,12 +519,19 @@ async def accept_offer(token: str, session: AsyncSession = Depends(get_session))
         .values(status=OfferStatus.expired.value)
     )
     await session.commit()
-    return await public_offer(token, session)
+    return public_offer_out(offer)
 
 
 @app.post("/api/public/offers/{token}/decline", response_model=PublicOfferOut)
 async def decline_offer(token: str, session: AsyncSession = Depends(get_session)) -> PublicOfferOut:
-    offer = await public_offer_by_token(session, token)
+    offer = await public_offer_by_token(session, token, for_update=True)
+    if offer.status == OfferStatus.declined.value:
+        return public_offer_out(offer)
+    if offer.status != OfferStatus.sent.value:
+        raise HTTPException(status_code=409, detail=f"Offer is already {offer.status}")
+    if expire_if_needed(offer):
+        await session.commit()
+        raise HTTPException(status_code=409, detail="Offer has expired")
     offer.status = OfferStatus.declined.value
     ack = render_offer_message(
         "decline_ack",
@@ -499,7 +544,7 @@ async def decline_offer(token: str, session: AsyncSession = Depends(get_session)
     )
     await MockCommunicationProvider(session).send_message(offer.channel, offer.customer, ack, offer.business_id, offer.id)
     await session.commit()
-    return await public_offer(token, session)
+    return public_offer_out(offer)
 
 
 @app.get("/api/messages", response_model=list[MessageOut])
@@ -581,4 +626,3 @@ async def patch_settings(business_id: int, payload: SettingsPatch, session: Asyn
             setattr(policy, key, value)
     await session.commit()
     return await get_settings(business_id, session)
-

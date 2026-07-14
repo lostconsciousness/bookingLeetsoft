@@ -134,3 +134,16 @@ def test_frequency_cap_blocks_candidate() -> None:
 
     assert candidates == []
 
+
+def test_candidate_generation_returns_every_eligible_customer_in_ranked_order() -> None:
+    windows = [
+        booking(1, dt(12), dt(13), customer_id=1),
+        booking(2, dt(15), dt(16), customer_id=2),
+        booking(3, dt(17), dt(18), customer_id=3),
+    ]
+    gaps = detect_schedule_gaps(windows, {1: 24}, 30)
+
+    candidates = generate_candidates(gaps, windows, {}, 3, 10, 20)
+
+    assert [candidate.booking.booking_id for candidate in candidates] == [2, 3]
+    assert all(candidate.suggested_start == dt(13, 10) for candidate in candidates)

@@ -47,6 +47,7 @@ export type Gap = {
 
 export type Candidate = {
   booking_id: number;
+  customer_id: number;
   customer_name: string;
   service_name: string;
   old_start: string;
@@ -59,6 +60,8 @@ export type Candidate = {
   reason: string;
   gap: Gap;
 };
+
+export type OfferStatus = "draft" | "sent" | "accepted" | "declined" | "expired";
 
 export type Schedule = {
   business: Business;
@@ -87,6 +90,7 @@ export type Offer = {
   id: number;
   token: string;
   booking_id: number;
+  staff_member_id: number;
   customer_id: number;
   business_id: number;
   old_start: string;
@@ -96,7 +100,7 @@ export type Offer = {
   incentive_type: string;
   incentive_value: string;
   message_text: string;
-  status: string;
+  status: OfferStatus;
   channel: string;
   expires_at: string;
   created_at: string;
@@ -118,7 +122,7 @@ export type PublicOffer = {
   suggested_end: string;
   incentive_type: string;
   incentive_value: string;
-  status: "sent" | "accepted" | "declined" | "expired";
+  status: Exclude<OfferStatus, "draft">;
   message_text: string;
 };
 
@@ -161,23 +165,37 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || response.statusText);
+    let message = text || response.statusText;
+    try {
+      const payload = JSON.parse(text) as { detail?: string };
+      if (typeof payload.detail === "string") message = payload.detail;
+    } catch {
+      // Non-JSON error bodies are already suitable for display.
+    }
+    throw new Error(message);
   }
   return response.json();
 }
 
 export const api = {
   apiUrl: API_URL,
-  today: () => new Date().toISOString().slice(0, 10),
+  today: () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  },
   seed: () => request<{ status: string }>("/api/demo/seed", { method: "POST" }),
   businesses: () => request<Business[]>("/api/businesses"),
   schedule: (businessId: number, date: string, staffId?: number) =>
     request<Schedule>(`/api/schedule?businessId=${businessId}&date=${date}${staffId ? `&staffId=${staffId}` : ""}`),
   offers: () => request<Offer[]>("/api/offers"),
-  generateOffer: (businessId: number, date: string, staffId?: number, bookingId?: number, channel = "whatsapp") =>
+  offer: (offerId: number) => request<Offer>(`/api/offers/${offerId}`),
+  generateOffer: (businessId: number, date: string, staffId: number | undefined, bookingId: number, suggestedStart: string, channel = "whatsapp") =>
     request<Offer>("/api/optimization/generate-offer", {
       method: "POST",
-      body: JSON.stringify({ businessId, date, staffId, bookingId, channel }),
+      body: JSON.stringify({ businessId, date, staffId, bookingId, suggestedStart, channel }),
     }),
   messages: (customerId?: number) => request<Message[]>(`/api/messages${customerId ? `?customerId=${customerId}` : ""}`),
   publicOffer: (token: string) => request<PublicOffer>(`/api/public/offers/${token}`),

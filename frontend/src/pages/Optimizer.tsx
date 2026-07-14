@@ -1,9 +1,11 @@
-import { ArrowDown, Check, Send, X } from "lucide-react";
+import { ArrowDown, Check, ExternalLink, Loader2, Send, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ChannelPreview } from "../components/ChannelPreview";
 import { Toolbar } from "../components/Toolbar";
-import { api, Booking, Candidate, Gap, Staff, money, time } from "../lib/api";
+import { api, Booking, Candidate, Gap, Offer, Staff, money, time } from "../lib/api";
+import { candidateKey, findActiveOffer, localDateKey } from "./offerSelection";
 import { useDemo } from "./useDemo";
+import { useOfferPolling } from "./useOfferPolling";
 
 const START_HOUR = 8;
 const END_HOUR = 18;
@@ -112,46 +114,101 @@ function StaffLane({
 export default function Optimizer() {
   const demo = useDemo();
   const [channel, setChannel] = useState("whatsapp");
-  const [offerMessage, setOfferMessage] = useState("");
   const [actionMessage, setActionMessage] = useState("");
+  const [activeOffer, setActiveOffer] = useState<Offer>();
+  const [generating, setGenerating] = useState(false);
+  const [responding, setResponding] = useState<"accept" | "decline">();
   const candidates = useMemo(() => demo.schedule?.candidates ?? [], [demo.schedule?.candidates]);
   const [selectedCandidateKey, setSelectedCandidateKey] = useState("");
-  const candidate = candidates.find((item) => `${item.booking_id}-${item.suggested_start}` === selectedCandidateKey) ?? candidates[0];
+  const candidate = candidates.find((item) => candidateKey(item) === selectedCandidateKey) ?? candidates[0];
   const visibleStaff = demo.schedule?.staff.filter((member) => !demo.staffId || member.id === demo.staffId) ?? [];
   const gridColumns = `64px repeat(${Math.max(visibleStaff.length, 1)}, minmax(260px, 1fr))`;
+  const workflowStep = activeOffer?.status === "accepted" ? 4 : activeOffer ? 3 : 2;
 
   useEffect(() => {
     if (!candidates.length) {
       setSelectedCandidateKey("");
       return;
     }
-    const stillExists = candidates.some((item) => `${item.booking_id}-${item.suggested_start}` === selectedCandidateKey);
-    if (!stillExists) setSelectedCandidateKey(`${candidates[0].booking_id}-${candidates[0].suggested_start}`);
+    const stillExists = candidates.some((item) => candidateKey(item) === selectedCandidateKey);
+    if (!stillExists) setSelectedCandidateKey(candidateKey(candidates[0]));
   }, [candidates, selectedCandidateKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setActiveOffer((current) => {
+      if (
+        current?.status === "sent" &&
+        current.business_id === demo.businessId &&
+        localDateKey(current.old_start) === demo.date &&
+        (!demo.staffId || current.staff_member_id === demo.staffId)
+      ) return current;
+      return undefined;
+    });
+    api.offers()
+      .then((rows) => {
+        if (!cancelled) setActiveOffer((current) => current ?? findActiveOffer(rows, demo.businessId, demo.date, demo.staffId));
+      })
+      .catch((error) => {
+        if (!cancelled) setActionMessage(error instanceof Error ? error.message : "Could not restore the active offer.");
+      });
+    return () => { cancelled = true; };
+  }, [demo.businessId, demo.date, demo.staffId]);
+
+  useOfferPolling(
+    activeOffer,
+    (next) => {
+      const changedToFinal = activeOffer?.status === "sent" && next.status !== "sent";
+      setActiveOffer(next);
+      if (changedToFinal) {
+        setActionMessage(next.status === "accepted" ? "Customer accepted. The booking has moved." : next.status === "declined" ? "Customer declined. The original booking is unchanged." : "This offer is no longer available.");
+        void demo.refresh();
+      }
+    },
+    (error) => setActionMessage(error.message),
+  );
 
   async function generateOffer() {
     if (!demo.schedule || !candidate) return;
     setActionMessage("");
+    setGenerating(true);
     try {
-      const offer = await api.generateOffer(demo.businessId, demo.date, demo.staffId, candidate.booking_id, channel);
-      setOfferMessage(offer.message_text);
-      setActionMessage("Offer generated. This booking is now removed from suggested moves until the customer accepts, declines, or it expires.");
+      const offer = await api.generateOffer(demo.businessId, demo.date, demo.staffId, candidate.booking_id, candidate.suggested_start, channel);
+      setActiveOffer(offer);
+      setActionMessage(`Offer sent to ${offer.customer_name}. Waiting for a response.`);
       await demo.refresh();
     } catch (err) {
       setActionMessage(err instanceof Error ? err.message : "Could not generate offer.");
       await demo.refresh();
+    } finally {
+      setGenerating(false);
     }
   }
 
   async function simulate(action: "accept" | "decline") {
     setActionMessage("");
-    const offers = await api.offers();
-    const offer = offers.find((item) => item.status === "sent" && item.booking_id === candidate?.booking_id) ?? offers.find((item) => item.status === "sent");
-    if (!offer) return;
-    if (action === "accept") await api.acceptOffer(offer.token);
-    if (action === "decline") await api.declineOffer(offer.token);
-    setActionMessage(action === "accept" ? "Offer accepted. Booking moved and competing offers expired." : "Offer declined. Booking kept its original time.");
-    await demo.refresh();
+    if (!activeOffer || activeOffer.status !== "sent") {
+      setActionMessage("Send an offer before simulating the customer response.");
+      return;
+    }
+    setResponding(action);
+    try {
+      if (action === "accept") await api.acceptOffer(activeOffer.token);
+      if (action === "decline") await api.declineOffer(activeOffer.token);
+      const refreshed = await api.offer(activeOffer.id);
+      setActiveOffer(refreshed);
+      setActionMessage(action === "accept" ? "Offer accepted. The selected booking has moved." : "Offer declined. The selected booking kept its original time.");
+      await demo.refresh();
+    } catch (err) {
+      setActionMessage(err instanceof Error ? err.message : "The simulated response could not be saved.");
+      const refreshed = await api.offer(activeOffer.id).catch(() => undefined);
+      if (refreshed) {
+        setActiveOffer(refreshed);
+        if (refreshed.status !== "sent") await demo.refresh();
+      }
+    } finally {
+      setResponding(undefined);
+    }
   }
 
   return (
@@ -165,7 +222,7 @@ export default function Optimizer() {
         <span className="rounded-full border border-accent-200 bg-accent-50 px-3 py-1.5 text-xs font-semibold text-accent-700">Live recommendation engine</span>
       </div>
       <div className="surface grid overflow-hidden sm:grid-cols-4">
-        {["Detect gap", "Match customer", "Send offer", "Recover value"].map((step, index) => <div key={step} className={`flex items-center gap-3 border-slate-200 px-4 py-4 sm:border-r ${index <= 1 ? "bg-accent-50/50" : ""}`}><span className={`grid h-7 w-7 place-items-center rounded-full text-xs font-bold ${index <= 1 ? "bg-accent-600 text-white" : "bg-slate-100 text-slate-500"}`}>{index + 1}</span><span className="text-sm font-semibold text-slate-700">{step}</span></div>)}
+        {["Detect gap", "Match customer", "Send offer", "Recover value"].map((step, index) => <div key={step} className={`flex items-center gap-3 border-slate-200 px-4 py-4 sm:border-r ${index < workflowStep ? "bg-accent-50/50" : ""}`}><span className={`grid h-7 w-7 place-items-center rounded-full text-xs font-bold ${index < workflowStep ? "bg-accent-600 text-white" : "bg-slate-100 text-slate-500"}`}>{index + 1}</span><span className="text-sm font-semibold text-slate-700">{step}</span></div>)}
       </div>
       <Toolbar
         businesses={demo.businesses}
@@ -217,7 +274,7 @@ export default function Optimizer() {
                     staff={member}
                     bookings={demo.schedule?.bookings ?? []}
                     gaps={demo.schedule?.gaps ?? []}
-                    candidate={candidate}
+                    candidate={activeOffer?.status === "sent" ? undefined : candidate}
                   />
                 ))}
               </div>
@@ -226,30 +283,42 @@ export default function Optimizer() {
         </section>
         <aside className="space-y-4">
           <section className="surface p-5">
-            <p className="eyebrow">Recommended action</p>
-            <h3 className="mt-2 text-lg font-semibold text-slate-950">Suggested move</h3>
-            {candidates.length > 1 ? (
-              <div className="mt-4 space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Available moves</p>
+            <p className="eyebrow">{activeOffer?.status === "sent" ? "Offer in progress" : "Choose recipient"}</p>
+            <h3 className="mt-2 text-lg font-semibold text-slate-950">{activeOffer?.status === "sent" ? `Waiting for ${activeOffer.customer_name}` : "Who should receive the offer?"}</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-500">{activeOffer?.status === "sent" ? "Resolve the current offer before selecting the next eligible customer." : "Every option below is eligible for the selected gap and messaging policy."}</p>
+            {candidates.length && activeOffer?.status !== "sent" ? (
+              <div className="mt-4 max-h-80 space-y-2 overflow-y-auto pr-1">
                 {candidates.map((item) => {
-                  const key = `${item.booking_id}-${item.suggested_start}`;
+                  const key = candidateKey(item);
                   const staffName = demo.schedule?.staff.find((member) => member.id === item.gap.staff_id)?.name ?? "Staff";
+                  const incentive = item.incentive_type === "discount" ? `${item.incentive_value}% discount` : item.incentive_type === "bonus" ? item.incentive_value : "No incentive";
                   return (
                     <button
                       key={key}
+                      disabled={activeOffer?.status === "sent"}
                       onClick={() => setSelectedCandidateKey(key)}
-                      className={`w-full rounded-md border px-3 py-2 text-left text-sm ${
+                      className={`w-full rounded-lg border px-3 py-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60 ${
                         key === selectedCandidateKey ? "border-accent-300 bg-accent-50 text-accent-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                       }`}
                     >
-                      <span className="block font-semibold">{staffName}: {item.customer_name}</span>
-                      <span className="text-xs">{time(item.old_start)} to {time(item.suggested_start)}</span>
+                      <span className="flex items-start justify-between gap-3">
+                        <span>
+                          <span className="block font-semibold">{item.customer_name} · {item.service_name}</span>
+                          <span className="mt-1 block text-xs opacity-75">{staffName} · {time(item.old_start)} → {time(item.suggested_start)}</span>
+                          <span className="mt-1 block text-xs opacity-75">{incentive}</span>
+                        </span>
+                        <span className="shrink-0 rounded-md bg-white px-2 py-1 text-xs font-semibold text-accent-700">{money(item.estimated_saved_cost)}</span>
+                      </span>
                     </button>
                   );
                 })}
               </div>
             ) : null}
-            {candidate ? (
+            {activeOffer?.status === "sent" ? (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                The offer to {activeOffer.customer_name} is still active. Use the lifecycle controls below or answer through the customer link.
+              </div>
+            ) : candidate ? (
               <div className="mt-4 space-y-3">
                 <div className="rounded-lg bg-accent-50 p-4">
                   <p className="text-sm font-semibold text-accent-700">
@@ -270,30 +339,44 @@ export default function Optimizer() {
                     <option value="voice">Voice Call Preview</option>
                   </select>
                 </label>
-                <div className="grid gap-2">
-                  <button onClick={generateOffer} className="primary-button">
-                    <Send className="h-4 w-4" />
-                    Generate offer
-                  </button>
-                  <button onClick={() => simulate("accept")} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
-                    <Check className="h-4 w-4" />
-                    Simulate accepted
-                  </button>
-                  <button onClick={() => simulate("decline")} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
-                    <X className="h-4 w-4" />
-                    Simulate declined
-                  </button>
-                </div>
-                {actionMessage ? <div className="rounded-md border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">{actionMessage}</div> : null}
+                <button disabled={generating} onClick={generateOffer} className="primary-button w-full disabled:cursor-not-allowed disabled:opacity-50">
+                  {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {generating ? "Sending offer…" : `Send offer to ${candidate.customer_name}`}
+                </button>
               </div>
             ) : (
               <div className="mt-4 space-y-3">
                 <p className="text-sm text-slate-500">No eligible candidate found for this filter.</p>
-                <div className="rounded-xl border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">This schedule has no eligible moves. Reset the investor demo to replay the optimization journey.</div>
+                {!activeOffer ? <div className="rounded-xl border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">This schedule has no eligible moves. Reset the investor demo to replay the optimization journey.</div> : null}
               </div>
             )}
+            {actionMessage ? <div className="mt-4 rounded-md border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">{actionMessage}</div> : null}
           </section>
-          {offerMessage ? <ChannelPreview channel={channel} message={offerMessage} /> : null}
+          {activeOffer ? (
+            <section className="surface p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="eyebrow">Offer lifecycle</p>
+                  <h3 className="mt-2 text-lg font-semibold text-slate-950">{activeOffer.customer_name}</h3>
+                  <p className="mt-1 text-sm text-slate-500">{activeOffer.service_name} · {time(activeOffer.old_start)} → {time(activeOffer.suggested_start)}</p>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${activeOffer.status === "accepted" ? "bg-emerald-100 text-emerald-700" : activeOffer.status === "declined" || activeOffer.status === "expired" ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-700"}`}>{activeOffer.status}</span>
+              </div>
+              {activeOffer.status === "sent" ? <p className="mt-4 text-sm text-slate-500">Listening for a response. This page updates automatically.</p> : null}
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <button disabled={activeOffer.status !== "sent" || Boolean(responding)} onClick={() => simulate("accept")} className="primary-button disabled:cursor-not-allowed disabled:opacity-50">
+                  {responding === "accept" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Simulate accept
+                </button>
+                <button disabled={activeOffer.status !== "sent" || Boolean(responding)} onClick={() => simulate("decline")} className="secondary-button disabled:cursor-not-allowed disabled:opacity-50">
+                  {responding === "decline" ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                  Simulate decline
+                </button>
+              </div>
+              {activeOffer.public_url ? <a href={activeOffer.public_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"><ExternalLink className="h-4 w-4" />Open customer link</a> : null}
+            </section>
+          ) : null}
+          {activeOffer ? <ChannelPreview channel={activeOffer.channel} message={activeOffer.message_text} /> : null}
         </aside>
       </div>
     </div>

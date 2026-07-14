@@ -8,7 +8,7 @@ export default function PublicOffer() {
   const [offer, setOffer] = useState<PublicOfferType | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState<"accept" | "decline">();
 
   async function load() {
     setError("");
@@ -21,13 +21,22 @@ export default function PublicOffer() {
 
   async function respond(action: "accept" | "decline") {
     if (submitting || offer?.status !== "sent") return;
-    setSubmitting(true);
+    setSubmitting(action);
+    setError("");
     try {
       const row = action === "accept" ? await api.acceptOffer(token) : await api.declineOffer(token);
       setOffer(row);
       setMessage(action === "accept" ? "Confirmed. Your appointment has been moved." : "No problem. Your current booking stays unchanged.");
+    } catch (err) {
+      const responseMessage = err instanceof Error ? err.message : "Your response could not be saved.";
+      try {
+        setOffer(await api.publicOffer(token));
+      } catch {
+        // Keep the currently displayed offer if status refresh also fails.
+      }
+      setError(responseMessage);
     } finally {
-      setSubmitting(false);
+      setSubmitting(undefined);
     }
   }
 
@@ -59,16 +68,17 @@ export default function PublicOffer() {
           <p className="text-sm text-slate-600">Proposed time: {time(offer.suggested_start)}-{time(offer.suggested_end)}</p>
           {offer.incentive_type !== "none" ? <p className="text-sm font-semibold capitalize text-accent-700">{offer.incentive_type}: {offer.incentive_value}</p> : null}
         </div>
+        {error ? <div className="mt-5 rounded-md border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">{error}</div> : null}
         {message || finalMessage ? <div className="mt-5 rounded-md bg-accent-50 p-4 text-sm font-semibold text-accent-700">{message || finalMessage}</div> : null}
         {!isFinal ? (
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <button disabled={submitting} onClick={() => respond("accept")} className="primary-button py-3">
+            <button disabled={Boolean(submitting)} onClick={() => respond("accept")} className="primary-button py-3 disabled:cursor-not-allowed disabled:opacity-60">
               <CalendarCheck className="h-4 w-4" />
-              {submitting ? "Confirming..." : "Accept new time"}
+              {submitting === "accept" ? "Confirming..." : "Accept new time"}
             </button>
-            <button disabled={submitting} onClick={() => respond("decline")} className="secondary-button py-3">
+            <button disabled={Boolean(submitting)} onClick={() => respond("decline")} className="secondary-button py-3 disabled:cursor-not-allowed disabled:opacity-60">
               <CalendarX className="h-4 w-4" />
-              {submitting ? "Saving..." : "Keep current time"}
+              {submitting === "decline" ? "Saving..." : "Keep current time"}
             </button>
           </div>
         ) : (
