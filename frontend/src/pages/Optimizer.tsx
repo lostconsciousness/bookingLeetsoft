@@ -2,7 +2,9 @@ import { ArrowDown, Check, ExternalLink, Loader2, Send, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ChannelPreview } from "../components/ChannelPreview";
 import { Toolbar } from "../components/Toolbar";
-import { api, Booking, Candidate, Gap, Offer, Staff, money, time } from "../lib/api";
+import { offerStatusKey, useTranslation } from "../i18n/I18nContext";
+import { TKey } from "../i18n/I18nContext";
+import { api, Booking, Candidate, formatIncentive, Gap, Offer, Staff, money, time } from "../lib/api";
 import { candidateKey, findActiveOffer, localDateKey } from "./offerSelection";
 import { useDemo } from "./useDemo";
 import { useOfferPolling } from "./useOfferPolling";
@@ -34,8 +36,8 @@ function BookingCard({ booking }: { booking: Booking }) {
     >
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold leading-5 text-slate-950">{booking.customer_name}</p>
-          {!compact ? <p className="truncate text-xs leading-4 text-slate-500">{booking.service_name}</p> : null}
+          <p className="truncate text-sm font-semibold leading-5 text-slate-950" title={booking.customer_name}>{booking.customer_name}</p>
+          {!compact ? <p className="truncate text-xs leading-4 text-slate-500" title={booking.service_name}>{booking.service_name}</p> : null}
         </div>
         <p className="shrink-0 whitespace-nowrap text-xs font-medium text-slate-500">
           {time(booking.start_at)}-{time(booking.end_at)}
@@ -46,26 +48,36 @@ function BookingCard({ booking }: { booking: Booking }) {
 }
 
 function GapBlock({ gap }: { gap: Gap }) {
+  const { t } = useTranslation();
+  const label = t("optimizer.gapLabel", { minutes: gap.idle_minutes, cost: money(gap.estimated_idle_cost) });
   return (
     <div
       className="absolute left-3 right-3 z-10 rounded-md border border-dashed border-amber-300 bg-amber-50/85 px-3 py-2 text-xs font-semibold text-amber-800"
       style={blockStyle(gap.start_at, gap.end_at)}
     >
-      <span className="block truncate">
-        Idle gap {gap.idle_minutes} min / idle cost {money(gap.estimated_idle_cost)}
+      <span className="block truncate" title={label}>
+        {label}
       </span>
     </div>
   );
 }
 
+const MARKER_HEIGHT = 36;
+
 function CandidateMarker({ candidate }: { candidate: Candidate }) {
+  const { t } = useTranslation();
+  const label = t("optimizer.moveCandidateHere", { name: candidate.customer_name });
+  const gapBottom = minutesFromStart(candidate.gap.end_at) * MINUTE_HEIGHT;
+  const gapTop = minutesFromStart(candidate.gap.start_at) * MINUTE_HEIGHT;
+  const top = Math.max(gapTop + 8, gapBottom - MARKER_HEIGHT);
   return (
     <div
       className="absolute right-3 z-30 flex max-w-[calc(100%-1.5rem)] items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-xs font-semibold text-white shadow-soft"
-      style={{ top: minutesFromStart(candidate.gap.start_at) * MINUTE_HEIGHT + 10 }}
+      style={{ top }}
+      title={label}
     >
       <ArrowDown className="h-4 w-4 shrink-0" />
-      <span className="truncate">Move {candidate.customer_name} here</span>
+      <span className="truncate">{label}</span>
     </div>
   );
 }
@@ -75,7 +87,7 @@ function TimeLabels() {
     <div className="relative border-r border-slate-200 bg-white" style={{ height: TIMELINE_HEIGHT }}>
       {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, index) => (
         <div key={index} className="absolute left-0 right-0 border-t border-slate-200" style={{ top: index * 60 * MINUTE_HEIGHT }}>
-          <span className="absolute -top-2 right-3 bg-white px-1 text-xs font-medium text-slate-400">
+          <span className="absolute -top-2 right-3 bg-white px-1 text-xs font-medium text-slate-500">
             {String(START_HOUR + index).padStart(2, "0")}:00
           </span>
         </div>
@@ -112,6 +124,7 @@ function StaffLane({
 }
 
 export default function Optimizer() {
+  const { t } = useTranslation();
   const demo = useDemo();
   const [channel, setChannel] = useState("whatsapp");
   const [actionMessage, setActionMessage] = useState("");
@@ -123,7 +136,16 @@ export default function Optimizer() {
   const candidate = candidates.find((item) => candidateKey(item) === selectedCandidateKey) ?? candidates[0];
   const visibleStaff = demo.schedule?.staff.filter((member) => !demo.staffId || member.id === demo.staffId) ?? [];
   const gridColumns = `64px repeat(${Math.max(visibleStaff.length, 1)}, minmax(260px, 1fr))`;
-  const workflowStep = activeOffer?.status === "accepted" ? 4 : activeOffer ? 3 : 2;
+  const workflowStep = activeOffer?.status === "accepted"
+    ? 4
+    : activeOffer
+      ? 3
+      : candidates.length
+        ? 2
+        : demo.schedule
+          ? 1
+          : 0;
+  const steps: TKey[] = ["optimizer.stepDetect", "optimizer.stepMatch", "optimizer.stepSend", "optimizer.stepRecover"];
 
   useEffect(() => {
     if (!candidates.length) {
@@ -150,7 +172,7 @@ export default function Optimizer() {
         if (!cancelled) setActiveOffer((current) => current ?? findActiveOffer(rows, demo.businessId, demo.date, demo.staffId));
       })
       .catch((error) => {
-        if (!cancelled) setActionMessage(error instanceof Error ? error.message : "Could not restore the active offer.");
+        if (!cancelled) setActionMessage(error instanceof Error ? error.message : t("optimizer.msgRestoreFailed"));
       });
     return () => { cancelled = true; };
   }, [demo.businessId, demo.date, demo.staffId]);
@@ -161,7 +183,7 @@ export default function Optimizer() {
       const changedToFinal = activeOffer?.status === "sent" && next.status !== "sent";
       setActiveOffer(next);
       if (changedToFinal) {
-        setActionMessage(next.status === "accepted" ? "Customer accepted. The booking has moved." : next.status === "declined" ? "Customer declined. The original booking is unchanged." : "This offer is no longer available.");
+        setActionMessage(next.status === "accepted" ? t("optimizer.msgCustomerAccepted") : next.status === "declined" ? t("optimizer.msgCustomerDeclined") : t("optimizer.msgOfferExpired"));
         void demo.refresh();
       }
     },
@@ -175,10 +197,10 @@ export default function Optimizer() {
     try {
       const offer = await api.generateOffer(demo.businessId, demo.date, demo.staffId, candidate.booking_id, candidate.suggested_start, channel);
       setActiveOffer(offer);
-      setActionMessage(`Offer sent to ${offer.customer_name}. Waiting for a response.`);
+      setActionMessage(t("optimizer.msgOfferSent", { name: offer.customer_name ?? "" }));
       await demo.refresh();
     } catch (err) {
-      setActionMessage(err instanceof Error ? err.message : "Could not generate offer.");
+      setActionMessage(err instanceof Error ? err.message : t("optimizer.msgOfferGenerateFailed"));
       await demo.refresh();
     } finally {
       setGenerating(false);
@@ -188,7 +210,7 @@ export default function Optimizer() {
   async function simulate(action: "accept" | "decline") {
     setActionMessage("");
     if (!activeOffer || activeOffer.status !== "sent") {
-      setActionMessage("Send an offer before simulating the customer response.");
+      setActionMessage(t("optimizer.msgSendBeforeSimulate"));
       return;
     }
     setResponding(action);
@@ -197,10 +219,10 @@ export default function Optimizer() {
       if (action === "decline") await api.declineOffer(activeOffer.token);
       const refreshed = await api.offer(activeOffer.id);
       setActiveOffer(refreshed);
-      setActionMessage(action === "accept" ? "Offer accepted. The selected booking has moved." : "Offer declined. The selected booking kept its original time.");
+      setActionMessage(action === "accept" ? t("optimizer.msgOfferAccepted") : t("optimizer.msgOfferDeclined"));
       await demo.refresh();
     } catch (err) {
-      setActionMessage(err instanceof Error ? err.message : "The simulated response could not be saved.");
+      setActionMessage(err instanceof Error ? err.message : t("optimizer.msgSimulateFailed"));
       const refreshed = await api.offer(activeOffer.id).catch(() => undefined);
       if (refreshed) {
         setActiveOffer(refreshed);
@@ -215,14 +237,14 @@ export default function Optimizer() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="eyebrow">Optimization workspace</p>
-          <h2 className="page-title">Recover today&apos;s hidden capacity</h2>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">Review the highest-impact move, choose a simulated channel, and watch the schedule improve.</p>
+          <p className="eyebrow">{t("optimizer.kicker")}</p>
+          <h2 className="page-title">{t("optimizer.title")}</h2>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">{t("optimizer.subtitle")}</p>
         </div>
-        <span className="rounded-full border border-accent-200 bg-accent-50 px-3 py-1.5 text-xs font-semibold text-accent-700">Live recommendation engine</span>
+        <span className="rounded-full border border-accent-200 bg-accent-50 px-3 py-1.5 text-xs font-semibold text-accent-700">{t("optimizer.liveEngine")}</span>
       </div>
       <div className="surface grid overflow-hidden sm:grid-cols-4">
-        {["Detect gap", "Match customer", "Send offer", "Recover value"].map((step, index) => <div key={step} className={`flex items-center gap-3 border-slate-200 px-4 py-4 sm:border-r ${index < workflowStep ? "bg-accent-50/50" : ""}`}><span className={`grid h-7 w-7 place-items-center rounded-full text-xs font-bold ${index < workflowStep ? "bg-accent-600 text-white" : "bg-slate-100 text-slate-500"}`}>{index + 1}</span><span className="text-sm font-semibold text-slate-700">{step}</span></div>)}
+        {steps.map((step, index) => <div key={step} className={`flex items-center gap-3 border-slate-200 px-4 py-4 sm:border-r ${index < workflowStep ? "bg-accent-50/50" : ""}`}><span className={`grid h-7 w-7 place-items-center rounded-full text-xs font-bold ${index < workflowStep ? "bg-accent-600 text-white" : "bg-slate-100 text-slate-500"}`}>{index + 1}</span><span className="text-sm font-semibold text-slate-700">{t(step)}</span></div>)}
       </div>
       <Toolbar
         businesses={demo.businesses}
@@ -248,17 +270,17 @@ export default function Optimizer() {
         <section className="surface p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="text-lg font-semibold text-slate-950">{demo.schedule?.business.name ?? "Loading schedule"}</h3>
-              <p className="text-sm text-slate-500">Timeline from 08:00 to 18:00, split by staff member</p>
+              <h3 className="text-lg font-semibold text-slate-950">{demo.schedule?.business.name ?? t("common.loading")}</h3>
+              <p className="text-sm text-slate-500">{t("optimizer.timelineSubtitle")}</p>
             </div>
             <div className="rounded-md bg-accent-50 px-3 py-2 text-sm font-semibold text-accent-700">
-              {demo.schedule?.metrics.detectedIdleMinutes ?? 0} idle minutes
+              {t("optimizer.idleMinutes", { count: demo.schedule?.metrics.detectedIdleMinutes ?? 0 })}
             </div>
           </div>
           <div className="overflow-x-auto rounded-lg border border-slate-200">
             <div className="min-w-[720px]">
               <div className="grid border-b border-slate-200 bg-white" style={{ gridTemplateColumns: gridColumns }}>
-                <div className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Time</div>
+                <div className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("optimizer.timeColumn")}</div>
                 {visibleStaff.map((member) => (
                   <div key={member.id} className="border-l border-slate-200 px-4 py-3">
                     <p className="text-sm font-semibold text-slate-950">{member.name}</p>
@@ -283,18 +305,20 @@ export default function Optimizer() {
         </section>
         <aside className="space-y-4">
           <section className="surface p-5">
-            <p className="eyebrow">{activeOffer?.status === "sent" ? "Offer in progress" : "Choose recipient"}</p>
-            <h3 className="mt-2 text-lg font-semibold text-slate-950">{activeOffer?.status === "sent" ? `Waiting for ${activeOffer.customer_name}` : "Who should receive the offer?"}</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-500">{activeOffer?.status === "sent" ? "Resolve the current offer before selecting the next eligible customer." : "Every option below is eligible for the selected gap and messaging policy."}</p>
+            <p className="eyebrow">{activeOffer?.status === "sent" ? t("optimizer.offerInProgress") : t("optimizer.chooseRecipient")}</p>
+            <h3 className="mt-2 text-lg font-semibold text-slate-950">{activeOffer?.status === "sent" ? t("optimizer.waitingFor", { name: activeOffer.customer_name ?? "" }) : t("optimizer.whoShouldReceive")}</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-500">{activeOffer?.status === "sent" ? t("optimizer.resolveCurrentOffer") : t("optimizer.everyOptionEligible")}</p>
             {candidates.length && activeOffer?.status !== "sent" ? (
-              <div className="mt-4 max-h-80 space-y-2 overflow-y-auto pr-1">
+              <div className="mt-4 max-h-80 space-y-2 overflow-y-auto pr-1" role="radiogroup" aria-label={t("common.eligibleCandidates")}>
                 {candidates.map((item) => {
                   const key = candidateKey(item);
-                  const staffName = demo.schedule?.staff.find((member) => member.id === item.gap.staff_id)?.name ?? "Staff";
-                  const incentive = item.incentive_type === "discount" ? `${item.incentive_value}% discount` : item.incentive_type === "bonus" ? item.incentive_value : "No incentive";
+                  const staffName = demo.schedule?.staff.find((member) => member.id === item.gap.staff_id)?.name ?? "";
+                  const incentive = formatIncentive(item.incentive_type, item.incentive_value, t);
                   return (
                     <button
                       key={key}
+                      role="radio"
+                      aria-checked={key === selectedCandidateKey}
                       disabled={activeOffer?.status === "sent"}
                       onClick={() => setSelectedCandidateKey(key)}
                       className={`w-full rounded-lg border px-3 py-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60 ${
@@ -316,13 +340,13 @@ export default function Optimizer() {
             ) : null}
             {activeOffer?.status === "sent" ? (
               <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                The offer to {activeOffer.customer_name} is still active. Use the lifecycle controls below or answer through the customer link.
+                {t("optimizer.offerStillActive", { name: activeOffer.customer_name ?? "" })}
               </div>
             ) : candidate ? (
               <div className="mt-4 space-y-3">
                 <div className="rounded-lg bg-accent-50 p-4">
                   <p className="text-sm font-semibold text-accent-700">
-                    {candidate.customer_name} / {candidate.service_name}
+                    {candidate.customer_name} · {candidate.service_name}
                   </p>
                   <p className="mt-1 text-sm text-slate-700">
                     {time(candidate.old_start)} to {time(candidate.suggested_start)}
@@ -330,50 +354,50 @@ export default function Optimizer() {
                   <p className="mt-2 text-sm text-slate-500">{candidate.reason}</p>
                 </div>
                 <label className="grid gap-1 text-sm font-medium text-slate-600">
-                  Preview channel
+                  {t("optimizer.previewChannel")}
                   <select value={channel} onChange={(event) => setChannel(event.target.value)} className="rounded-md border border-slate-300 px-3 py-2">
-                    <option value="whatsapp">WhatsApp</option>
-                    <option value="sms">SMS</option>
-                    <option value="email">Email</option>
-                    <option value="telegram">Telegram</option>
-                    <option value="voice">Voice Call Preview</option>
+                    <option value="whatsapp">{t("channel.whatsapp")}</option>
+                    <option value="sms">{t("channel.sms")}</option>
+                    <option value="email">{t("channel.email")}</option>
+                    <option value="telegram">{t("channel.telegram")}</option>
+                    <option value="voice">{t("optimizer.channelVoicePreview")}</option>
                   </select>
                 </label>
                 <button disabled={generating} onClick={generateOffer} className="primary-button w-full disabled:cursor-not-allowed disabled:opacity-50">
                   {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  {generating ? "Sending offer…" : `Send offer to ${candidate.customer_name}`}
+                  {generating ? t("optimizer.sendingOffer") : t("optimizer.sendOfferTo", { name: candidate.customer_name })}
                 </button>
               </div>
             ) : (
               <div className="mt-4 space-y-3">
-                <p className="text-sm text-slate-500">No eligible candidate found for this filter.</p>
-                {!activeOffer ? <div className="rounded-xl border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">This schedule has no eligible moves. Reset the investor demo to replay the optimization journey.</div> : null}
+                <p className="text-sm text-slate-500">{t("optimizer.noEligibleCandidate")}</p>
+                {!activeOffer ? <div className="rounded-xl border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">{t("optimizer.noEligibleMoves")}</div> : null}
               </div>
             )}
-            {actionMessage ? <div className="mt-4 rounded-md border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">{actionMessage}</div> : null}
+            <div aria-live="polite">{actionMessage ? <div className="mt-4 rounded-md border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">{actionMessage}</div> : null}</div>
           </section>
           {activeOffer ? (
             <section className="surface p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="eyebrow">Offer lifecycle</p>
+                  <p className="eyebrow">{t("optimizer.offerLifecycle")}</p>
                   <h3 className="mt-2 text-lg font-semibold text-slate-950">{activeOffer.customer_name}</h3>
                   <p className="mt-1 text-sm text-slate-500">{activeOffer.service_name} · {time(activeOffer.old_start)} → {time(activeOffer.suggested_start)}</p>
                 </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${activeOffer.status === "accepted" ? "bg-emerald-100 text-emerald-700" : activeOffer.status === "declined" || activeOffer.status === "expired" ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-700"}`}>{activeOffer.status}</span>
+                <span aria-live="polite" className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${activeOffer.status === "accepted" ? "bg-emerald-100 text-emerald-700" : activeOffer.status === "declined" || activeOffer.status === "expired" ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-700"}`}>{t(offerStatusKey(activeOffer.status))}</span>
               </div>
-              {activeOffer.status === "sent" ? <p className="mt-4 text-sm text-slate-500">Listening for a response. This page updates automatically.</p> : null}
+              {activeOffer.status === "sent" ? <p className="mt-4 text-sm text-slate-500">{t("optimizer.listeningForResponse")}</p> : null}
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 <button disabled={activeOffer.status !== "sent" || Boolean(responding)} onClick={() => simulate("accept")} className="primary-button disabled:cursor-not-allowed disabled:opacity-50">
                   {responding === "accept" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  Simulate accept
+                  {t("optimizer.simulateAccept")}
                 </button>
                 <button disabled={activeOffer.status !== "sent" || Boolean(responding)} onClick={() => simulate("decline")} className="secondary-button disabled:cursor-not-allowed disabled:opacity-50">
                   {responding === "decline" ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
-                  Simulate decline
+                  {t("optimizer.simulateDecline")}
                 </button>
               </div>
-              {activeOffer.public_url ? <a href={activeOffer.public_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"><ExternalLink className="h-4 w-4" />Open customer link</a> : null}
+              {activeOffer.public_url ? <a href={activeOffer.public_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"><ExternalLink className="h-4 w-4" />{t("optimizer.openCustomerLink")}</a> : null}
             </section>
           ) : null}
           {activeOffer ? <ChannelPreview channel={activeOffer.channel} message={activeOffer.message_text} /> : null}

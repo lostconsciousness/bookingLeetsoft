@@ -1,6 +1,7 @@
 import { RefreshCw, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { StatCard } from "../components/StatCard";
+import { TKey, useTranslation } from "../i18n/I18nContext";
 import { api, dateTimeLocal, money, Quote } from "../lib/api";
 import { useDemo } from "./useDemo";
 
@@ -14,6 +15,7 @@ function overlaps(start: Date, end: Date, bookingStart: string, bookingEnd: stri
 }
 
 export default function SmartBooking() {
+  const { t } = useTranslation();
   const demo = useDemo();
   const [serviceId, setServiceId] = useState<number | undefined>();
   const [staffId, setStaffId] = useState<number | undefined>();
@@ -63,12 +65,21 @@ export default function SmartBooking() {
     const early = firstAvailable(["08:00", "08:15", "08:30", "09:00", "09:30"]);
     const prime = firstAvailable(["16:00", "16:30", "17:00"]);
     const gap = gapSlot;
-    return [
-      { label: "Best for business", time: gap ?? early, tag: gap ? "Fills a real schedule gap" : "Earliest available fit" },
-      { label: "Cheapest", time: early, tag: "Early low-demand" },
-      { label: "Prime time", time: prime, tag: "Standard price" },
-      { label: "Fills schedule gap", time: gap, tag: gap ? "Optimizer-friendly" : "No current gap fit" },
+    const seenTimes = new Set<string>();
+    const candidates: { label: TKey; time?: string; tag: TKey }[] = [
+      { label: "smartBooking.cardBestForBusiness", time: gap ?? early, tag: gap ? "smartBooking.tagFillsGap" : "smartBooking.tagEarliestFit" },
+      { label: "smartBooking.cardCheapest", time: early, tag: "smartBooking.tagEarlyLowDemand" },
+      { label: "smartBooking.cardPrimeTime", time: prime, tag: "smartBooking.tagStandardPrice" },
+      { label: "smartBooking.cardFillsGap", time: gap, tag: gap ? "smartBooking.tagOptimizerFriendly" : "smartBooking.tagNoGapFit" },
     ];
+    // Drop cards that recommend the exact same slot as an earlier card so the
+    // grid never presents two "different" options that are actually identical.
+    return candidates.filter((card) => {
+      if (!card.time) return true;
+      if (seenTimes.has(card.time)) return false;
+      seenTimes.add(card.time);
+      return true;
+    });
   }, [demo.schedule, selectedStaff, serviceDuration, gapSlot]);
 
   async function getQuote(nextStart = requestedStart) {
@@ -77,7 +88,7 @@ export default function SmartBooking() {
     setNotice("");
     setQuote(null);
     if (!isSlotAvailable(slot)) {
-      setNotice("This slot is already occupied or does not fit the working window. Pick one of the available slot cards.");
+      setNotice(t("smartBooking.slotUnavailable"));
       return;
     }
     setQuote(
@@ -92,7 +103,7 @@ export default function SmartBooking() {
 
   function chooseSlot(timeValue?: string) {
     if (!timeValue) {
-      setNotice("No available slot found for this card with the current staff and service.");
+      setNotice(t("smartBooking.noSlotFound"));
       return;
     }
     const next = dateTimeLocal(demo.date, timeValue);
@@ -104,19 +115,19 @@ export default function SmartBooking() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="eyebrow">Demand-aware booking</p>
-          <h2 className="page-title">Price every slot with purpose</h2>
-          <p className="mt-3 text-sm text-slate-500">Guide new demand toward the hours that improve utilization.</p>
+          <p className="eyebrow">{t("smartBooking.kicker")}</p>
+          <h2 className="page-title">{t("smartBooking.title")}</h2>
+          <p className="mt-3 text-sm text-slate-500">{t("smartBooking.subtitle")}</p>
         </div>
-        <button onClick={() => demo.refresh(demo.businessId, demo.date, staffId)} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
+        <button onClick={() => demo.refresh(demo.businessId, demo.date, staffId)} className="secondary-button">
           <RefreshCw className="h-4 w-4" />
-          Refresh schedule
+          {t("smartBooking.refreshSchedule")}
         </button>
       </div>
       <section className="surface p-5">
-        <div className="grid gap-3 lg:grid-cols-6">
+        <div className="grid gap-3 lg:grid-cols-4">
           <label className="grid gap-1 text-sm font-medium text-slate-600">
-            Business
+            {t("common.business")}
             <select
               value={demo.businessId}
               onChange={(event) => {
@@ -135,7 +146,7 @@ export default function SmartBooking() {
             </select>
           </label>
           <label className="grid gap-1 text-sm font-medium text-slate-600">
-            Date
+            {t("common.date")}
             <input
               type="date"
               value={demo.date}
@@ -150,7 +161,7 @@ export default function SmartBooking() {
             />
           </label>
           <label className="grid gap-1 text-sm font-medium text-slate-600">
-            Service
+            {t("smartBooking.service")}
             <select
               value={selectedService?.id ?? ""}
               onChange={(event) => {
@@ -166,7 +177,7 @@ export default function SmartBooking() {
             </select>
           </label>
           <label className="grid gap-1 text-sm font-medium text-slate-600">
-            Staff
+            {t("common.staff")}
             <select
               value={selectedStaff?.id ?? ""}
               onChange={(event) => {
@@ -181,22 +192,24 @@ export default function SmartBooking() {
               ))}
             </select>
           </label>
-          <label className="grid gap-1 text-sm font-medium text-slate-600">
-            Requested start
+        </div>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="grid min-w-[240px] flex-1 gap-1 text-sm font-medium text-slate-600">
+            {t("smartBooking.requestedStart")}
             <input type="datetime-local" value={requestedStart} onChange={(event) => setRequestedStart(event.target.value)} className="rounded-md border border-slate-300 px-3 py-2" />
           </label>
-          <button onClick={() => getQuote()} className="primary-button mt-6">
+          <button onClick={() => getQuote()} className="primary-button shrink-0">
             <Sparkles className="h-4 w-4" />
-            Quote slot
+            {t("smartBooking.quoteSlot")}
           </button>
         </div>
       </section>
       {notice ? <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800">{notice}</div> : null}
       {quote ? (
         <div className="grid gap-4 md:grid-cols-3">
-          <StatCard label="Base price" value={money(quote.basePrice)} />
-          <StatCard label="Adjusted price" value={money(quote.adjustedPrice)} />
-          <StatCard label="Discount" value={`${quote.discountPercent}%`} hint={quote.reason} />
+          <StatCard label={t("smartBooking.basePrice")} value={money(quote.basePrice)} />
+          <StatCard label={t("smartBooking.adjustedPrice")} value={money(quote.adjustedPrice)} />
+          <StatCard label={t("smartBooking.discount")} value={`${quote.discountPercent}%`} hint={quote.reason} />
         </div>
       ) : null}
       <div className="grid gap-4 md:grid-cols-4">
@@ -204,11 +217,11 @@ export default function SmartBooking() {
           <button
             key={card.label}
             onClick={() => chooseSlot(card.time)}
-            className={`rounded-2xl border p-5 text-left shadow-soft ${card.time ? "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-accent-300" : "border-slate-200 bg-slate-50 text-slate-400"}`}
+            className={`rounded-2xl border p-5 text-left shadow-soft ${card.time ? "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-accent-300" : "border-slate-200 bg-slate-50 text-slate-500"}`}
           >
-            <p className="font-semibold text-slate-950">{card.label}</p>
-            <p className="mt-2 text-2xl font-semibold text-accent-700">{card.time ?? "No fit"}</p>
-            <p className="mt-2 text-sm text-slate-500">{card.tag}</p>
+            <p className="font-semibold text-slate-950">{t(card.label)}</p>
+            <p className="mt-2 text-2xl font-semibold text-accent-700">{card.time ?? t("smartBooking.noFit")}</p>
+            <p className="mt-2 text-sm text-slate-500">{t(card.tag)}</p>
           </button>
         ))}
       </div>

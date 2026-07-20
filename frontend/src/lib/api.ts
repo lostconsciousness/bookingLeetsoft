@@ -1,3 +1,5 @@
+import type { TKey } from "../i18n/I18nContext";
+
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 export type Business = {
@@ -210,6 +212,35 @@ export const api = {
 
 export function time(value: string) {
   return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+export const CHANNEL_LABELS: Record<string, string> = {
+  whatsapp: "WhatsApp",
+  sms: "SMS",
+  email: "Email",
+  telegram: "Telegram",
+  voice: "Voice call",
+};
+
+export type Translate = (key: TKey, vars?: Record<string, string | number>) => string;
+
+const CHANNEL_KEYS: Record<string, TKey> = {
+  whatsapp: "channel.whatsapp",
+  sms: "channel.sms",
+  email: "channel.email",
+  telegram: "channel.telegram",
+  voice: "channel.voice",
+};
+
+export function channelLabel(t: Translate, channel: string) {
+  const key = CHANNEL_KEYS[channel];
+  return key ? t(key) : channel;
+}
+
+export function formatIncentive(type: string, value: string, t: Translate) {
+  if (type === "discount") return t("incentive.discount", { value });
+  if (type === "bonus") return value;
+  return t("incentive.none");
 }
 
 export function money(value: number | undefined | null) {
