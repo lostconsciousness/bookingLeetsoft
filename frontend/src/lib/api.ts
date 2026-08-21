@@ -211,7 +211,7 @@ export const api = {
 };
 
 export function time(value: string) {
-  return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+  return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
 }
 
 export const CHANNEL_LABELS: Record<string, string> = {

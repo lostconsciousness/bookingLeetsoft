@@ -6,7 +6,7 @@ import { offerStatusKey, useTranslation } from "../i18n/I18nContext";
 import { api, formatIncentive, PublicOffer as PublicOfferType, time } from "../lib/api";
 
 export default function PublicOffer() {
-  const { t } = useTranslation();
+  const { lang, t } = useTranslation();
   const { token = "" } = useParams();
   const [offer, setOffer] = useState<PublicOfferType | null>(null);
   const [error, setError] = useState("");
@@ -55,6 +55,11 @@ export default function PublicOffer() {
   }
 
   const isFinal = ["accepted", "declined", "expired"].includes(offer.status);
+  const locale = lang === "ru" ? "ru-RU" : lang === "uk" ? "uk-UA" : "en-GB";
+  const slotRange = (start: string, end: string) => {
+    const day = new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short" }).format(new Date(start));
+    return `${day}, ${time(start)}–${time(end)}`;
+  };
   const finalMessage =
     offer.status === "accepted"
       ? t("publicOffer.confirmedMoved")
@@ -77,8 +82,8 @@ export default function PublicOffer() {
         </p>
         <div className="mt-6 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-5">
           <p className="font-semibold text-slate-950">{offer.service_name}</p>
-          <p className="text-sm text-slate-600">{t("publicOffer.currentTime", { range: `${time(offer.current_start)}-${time(offer.current_end)}` })}</p>
-          <p className="text-sm text-slate-600">{t("publicOffer.proposedTime", { range: `${time(offer.suggested_start)}-${time(offer.suggested_end)}` })}</p>
+          <p className="text-sm text-slate-600">{t("publicOffer.currentTime", { range: slotRange(offer.current_start, offer.current_end) })}</p>
+          <p className="text-sm text-slate-600">{t("publicOffer.proposedTime", { range: slotRange(offer.suggested_start, offer.suggested_end) })}</p>
           {offer.incentive_type !== "none" ? <p className="text-sm font-semibold text-accent-700">{formatIncentive(offer.incentive_type, offer.incentive_value, t)}</p> : null}
         </div>
         <div aria-live="polite">

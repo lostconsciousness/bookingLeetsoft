@@ -23,12 +23,14 @@ def generate_candidates(
     message_cap: int,
     default_discount_percent: int,
     max_discount_percent: int,
+    candidate_bookings: list[BookingWindow] | None = None,
 ) -> list[CandidateResult]:
     candidates: list[CandidateResult] = []
+    candidate_pool = candidate_bookings if candidate_bookings is not None else bookings
     for gap in gaps:
         future_bookings = [
             booking
-            for booking in bookings
+            for booking in candidate_pool
             if booking.staff_id == gap.staff_id and booking.start_at >= gap.end_at
         ]
         for booking in sorted(future_bookings, key=lambda item: item.start_at):

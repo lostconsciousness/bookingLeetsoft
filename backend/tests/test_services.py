@@ -98,6 +98,8 @@ def test_offer_generation_template_includes_decline_safety() -> None:
 
     assert "10% off" in message
     assert "current time stays unchanged" in message
+    assert "Sat 30 May at 15:00" in message
+    assert "Sat 30 May at 13:10" in message
 
 
 def test_accept_flow_requires_availability_before_booking_update() -> None:
@@ -147,3 +149,27 @@ def test_candidate_generation_returns_every_eligible_customer_in_ranked_order() 
 
     assert [candidate.booking.booking_id for candidate in candidates] == [2, 3]
     assert all(candidate.suggested_start == dt(13, 10) for candidate in candidates)
+
+
+def test_candidate_generation_can_pull_a_booking_from_a_later_day() -> None:
+    schedule = [
+        booking(1, dt(12), dt(13), customer_id=1),
+        booking(2, dt(15), dt(16), customer_id=2),
+    ]
+    tomorrow = datetime(2026, 5, 31, 15, tzinfo=timezone.utc)
+    later_booking = booking(3, tomorrow, tomorrow + timedelta(hours=1), customer_id=3)
+    gaps = detect_schedule_gaps(schedule, {1: 24}, 30)
+
+    candidates = generate_candidates(
+        gaps,
+        schedule,
+        {},
+        3,
+        10,
+        20,
+        candidate_bookings=[*schedule, later_booking],
+    )
+
+    assert [candidate.booking.booking_id for candidate in candidates] == [2, 3]
+    assert candidates[1].booking.start_at.date() == tomorrow.date()
+    assert candidates[1].suggested_start == dt(13, 10)

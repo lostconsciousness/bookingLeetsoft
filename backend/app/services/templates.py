@@ -5,6 +5,10 @@ def fmt_time(value: datetime) -> str:
     return value.strftime("%H:%M")
 
 
+def fmt_slot(value: datetime) -> str:
+    return value.strftime("%a %d %b at %H:%M")
+
+
 def render_offer_message(
     template_key: str,
     customer_name: str,
@@ -24,6 +28,8 @@ def render_offer_message(
         "{{serviceName}}": service_name,
         "{{oldTime}}": fmt_time(old_start),
         "{{newTime}}": fmt_time(new_start),
+        "{{oldSlot}}": fmt_slot(old_start),
+        "{{newSlot}}": fmt_slot(new_start),
         "{{acceptUrl}}": accept_url,
         "{{discountPercent}}": discount_percent,
         "{{bonusName}}": bonus_name,
@@ -38,26 +44,26 @@ def render_offer_message(
 
 TEMPLATES = {
     "earlier_discount": (
-        "Hi {{customerName}}, {{businessName}} has an earlier opening for {{serviceName}} today "
-        "at {{newTime}} instead of {{oldTime}}. If this works for you, we can offer "
+        "Hi {{customerName}}, {{businessName}} has an earlier opening for {{serviceName}} on "
+        "{{newSlot}} instead of {{oldSlot}}. If this works for you, we can offer "
         "{{discountPercent}}% off. Confirm here: {{acceptUrl}}. If not, your current time stays unchanged."
     ),
     "earlier_none": (
-        "Hi {{customerName}}, an earlier time opened up for {{serviceName}} at {{newTime}} instead of "
-        "{{oldTime}}. If that is more convenient, you can confirm here: {{acceptUrl}}. Otherwise, "
-        "your booking remains at {{oldTime}}."
+        "Hi {{customerName}}, an earlier time opened up for {{serviceName}} on {{newSlot}} instead of "
+        "{{oldSlot}}. If that is more convenient, you can confirm here: {{acceptUrl}}. Otherwise, "
+        "your booking remains at {{oldSlot}}."
     ),
     "earlier_bonus": (
-        "Hi {{customerName}}, we can move your {{serviceName}} appointment from {{oldTime}} to {{newTime}}. "
+        "Hi {{customerName}}, we can move your {{serviceName}} appointment from {{oldSlot}} to {{newSlot}}. "
         "As a thank-you, we'll add {{bonusName}}. Confirm here: {{acceptUrl}}."
     ),
     "waitlist": (
-        "Hi {{customerName}}, an earlier waitlist opening is available for {{serviceName}} at {{newTime}}. "
-        "Confirm here: {{acceptUrl}} or keep your current time at {{oldTime}}."
+        "Hi {{customerName}}, an earlier waitlist opening is available for {{serviceName}} on {{newSlot}}. "
+        "Confirm here: {{acceptUrl}} or keep your current time at {{oldSlot}}."
     ),
     "auto_dropoff": (
-        "Hi {{customerName}}, {{businessName}} can take your car earlier today. You can drop it off at "
-        "{{newTime}} instead of {{oldTime}}. If that works, confirm here: {{acceptUrl}}. Otherwise, "
+        "Hi {{customerName}}, {{businessName}} can take your car earlier. You can drop it off on "
+        "{{newSlot}} instead of {{oldSlot}}. If that works, confirm here: {{acceptUrl}}. Otherwise, "
         "your current time stays unchanged."
     ),
     "small_gap_addon": (
@@ -65,11 +71,10 @@ TEMPLATES = {
         "{{addonServiceName}} with {{discountPercent}}% off without changing your main booking? "
         "Confirm here: {{acceptUrl}}."
     ),
-    "decline_ack": "Thanks, {{customerName}}. Your appointment remains at {{oldTime}}. See you at {{businessName}}.",
+    "decline_ack": "Thanks, {{customerName}}. Your appointment remains at {{oldSlot}}. See you at {{businessName}}.",
     "voice": (
         "Hello {{customerName}}, this is {{businessName}}. We're calling about your appointment for "
-        "{{serviceName}} at {{oldTime}}. We have an earlier opening at {{newTime}}. If it is convenient "
+        "{{serviceName}} on {{oldSlot}}. We have an earlier opening on {{newSlot}}. If it is convenient "
         "for you, we can move the appointment and offer {{incentive}}. Would you like to confirm the new time?"
     ),
 }
-

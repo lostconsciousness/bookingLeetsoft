@@ -38,6 +38,18 @@ describe("offer selection", () => {
     expect(findActiveOffer(rows, 41, "2026-07-15", 21)?.id).toBe(3);
   });
 
+  it("restores a cross-day offer on the day of its proposed slot", () => {
+    const row = offer({
+      id: 4,
+      old_start: "2026-07-16T15:00:00+03:00",
+      old_end: "2026-07-16T16:00:00+03:00",
+      suggested_start: "2026-07-15T13:00:00+03:00",
+      suggested_end: "2026-07-15T14:00:00+03:00",
+    });
+
+    expect(findActiveOffer([row], 41, "2026-07-15", 21)?.id).toBe(4);
+  });
+
   it("keeps the customer list stable and prioritizes active offers", () => {
     const messages: Message[] = [{
       id: 1,

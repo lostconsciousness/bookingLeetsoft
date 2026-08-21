@@ -98,9 +98,13 @@ async def seed_demo_data(session: AsyncSession) -> None:
     lukas = Customer(business_id=salon.id, name="Lukas", phone="+431000002", email="lukas@example.com")
     sofia = Customer(business_id=salon.id, name="Sofia", phone="+431000003", email="sofia@example.com")
     emma = Customer(business_id=salon.id, name="Emma", phone="+431000004", email="emma@example.com")
+    nina = Customer(business_id=salon.id, name="Nina", phone="+431000007", email="nina@example.com", prefers_earlier_slots=True)
+    oliver = Customer(business_id=salon.id, name="Oliver", phone="+431000008", email="oliver@example.com", prefers_earlier_slots=True)
+    david = Customer(business_id=salon.id, name="David", phone="+431000009", email="david@example.com", prefers_earlier_slots=True)
     peter = Customer(business_id=auto.id, name="Peter", phone="+431000005", email="peter@example.com", flexible_dropoff=True)
     daniel = Customer(business_id=auto.id, name="Daniel", phone="+431000006", email="daniel@example.com")
-    session.add_all([maria, lukas, sofia, emma, peter, daniel])
+    carla = Customer(business_id=auto.id, name="Carla", phone="+431000010", email="carla@example.com", flexible_dropoff=True)
+    session.add_all([maria, lukas, sofia, emma, nina, oliver, david, peter, daniel, carla])
     await session.flush()
 
     session.add_all(
@@ -109,8 +113,12 @@ async def seed_demo_data(session: AsyncSession) -> None:
             CustomerConsent(customer_id=lukas.id, service_messages=True, marketing_messages=False),
             CustomerConsent(customer_id=sofia.id, service_messages=True, marketing_messages=True),
             CustomerConsent(customer_id=emma.id, service_messages=True, marketing_messages=False),
+            CustomerConsent(customer_id=nina.id, service_messages=True, marketing_messages=True),
+            CustomerConsent(customer_id=oliver.id, service_messages=True, marketing_messages=True),
+            CustomerConsent(customer_id=david.id, service_messages=True, marketing_messages=False),
             CustomerConsent(customer_id=peter.id, service_messages=True, marketing_messages=True),
             CustomerConsent(customer_id=daniel.id, service_messages=True, marketing_messages=False),
+            CustomerConsent(customer_id=carla.id, service_messages=True, marketing_messages=True),
         ]
     )
 
@@ -126,6 +134,10 @@ async def seed_demo_data(session: AsyncSession) -> None:
             Booking(business_id=auto.id, staff_member_id=markus.id, service_id=diagnostics.id, customer_id=daniel.id, start_at=at(today, 8, 30), end_at=at(today, 9, 30)),
             Booking(business_id=auto.id, staff_member_id=markus.id, service_id=oil.id, customer_id=peter.id, start_at=at(today, 13), end_at=at(today, 13, 45)),
             Booking(business_id=auto.id, staff_member_id=markus.id, service_id=brakes.id, customer_id=daniel.id, start_at=at(today, 15, 30), end_at=at(today, 17)),
+            Booking(business_id=salon.id, staff_member_id=anna.id, service_id=haircut.id, customer_id=nina.id, start_at=at(today + timedelta(days=1), 16), end_at=at(today + timedelta(days=1), 17)),
+            Booking(business_id=salon.id, staff_member_id=anna.id, service_id=haircut.id, customer_id=oliver.id, start_at=at(today + timedelta(days=2), 14), end_at=at(today + timedelta(days=2), 15)),
+            Booking(business_id=salon.id, staff_member_id=max_barber.id, service_id=haircut.id, customer_id=david.id, start_at=at(today + timedelta(days=1), 15), end_at=at(today + timedelta(days=1), 16)),
+            Booking(business_id=auto.id, staff_member_id=markus.id, service_id=oil.id, customer_id=carla.id, start_at=at(today + timedelta(days=1), 14), end_at=at(today + timedelta(days=1), 14, 45)),
     ]
     session.add_all(current_bookings)
     await session.flush()

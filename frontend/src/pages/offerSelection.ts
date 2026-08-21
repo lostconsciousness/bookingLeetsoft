@@ -22,7 +22,7 @@ export function findActiveOffer(
     (offer) =>
       offer.status === "sent" &&
       offer.business_id === businessId &&
-      localDateKey(offer.old_start) === date &&
+      localDateKey(offer.suggested_start) === date &&
       (!staffId || offer.staff_member_id === staffId),
   );
 }
