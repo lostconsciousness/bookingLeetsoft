@@ -34,6 +34,27 @@ class MockCommunicationProvider(CommunicationProvider):
         await self.session.flush()
         return row
 
+    async def record_customer_reply(
+        self,
+        channel: str,
+        customer: Customer,
+        message: str,
+        business_id: int,
+        offer_id: int,
+    ) -> CommunicationMessage:
+        row = CommunicationMessage(
+            business_id=business_id,
+            customer_id=customer.id,
+            offer_id=offer_id,
+            channel=channel,
+            direction="inbound",
+            body=message,
+            delivery_status="mock_received",
+        )
+        self.session.add(row)
+        await self.session.flush()
+        return row
+
 
 class MockWhatsAppProvider(MockCommunicationProvider):
     pass
@@ -49,4 +70,3 @@ class MockEmailProvider(MockCommunicationProvider):
 
 class MockTelegramProvider(MockCommunicationProvider):
     pass
-

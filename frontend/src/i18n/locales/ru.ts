@@ -223,6 +223,9 @@ export const ru: typeof en = {
   channelPreview: {
     emailSubject: "Тема: освободилось более раннее время",
     voicePreview: "Предпросмотр сценария звонка",
+    secureAction: "Посмотреть предложение",
+    secureLinkHint: "Безопасная ссылка · Ничего не изменится без подтверждения клиента",
+    voiceLinkPlaceholder: "безопасную ссылку для подтверждения, отправленную клиенту",
   },
   errorBoundary: {
     title: "Что-то пошло не так при загрузке",

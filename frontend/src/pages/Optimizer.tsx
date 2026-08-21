@@ -7,7 +7,7 @@ import { Toolbar } from "../components/Toolbar";
 import { offerStatusKey, useTranslation } from "../i18n/I18nContext";
 import { TKey } from "../i18n/I18nContext";
 import { api, Offer, time } from "../lib/api";
-import { candidateKey, findActiveOffer, localDateKey } from "./offerSelection";
+import { candidateKey, findLatestOffer, localDateKey } from "./offerSelection";
 import { useDemo } from "./useDemo";
 import { useOfferPolling } from "./useOfferPolling";
 
@@ -49,7 +49,7 @@ export default function Optimizer() {
     let cancelled = false;
     setActiveOffer((current) => {
       if (
-        current?.status === "sent" &&
+        current &&
         current.business_id === demo.businessId &&
         localDateKey(current.suggested_start) === demo.date &&
         (!demo.staffId || current.staff_member_id === demo.staffId)
@@ -58,7 +58,7 @@ export default function Optimizer() {
     });
     api.offers()
       .then((rows) => {
-        if (!cancelled) setActiveOffer((current) => current ?? findActiveOffer(rows, demo.businessId, demo.date, demo.staffId));
+        if (!cancelled) setActiveOffer((current) => current ?? findLatestOffer(rows, demo.businessId, demo.date, demo.staffId));
       })
       .catch((error) => {
         if (!cancelled) setActionMessage(error instanceof Error ? error.message : t("optimizer.msgRestoreFailed"));
@@ -227,6 +227,11 @@ export default function Optimizer() {
                 <span aria-live="polite" className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${activeOffer.status === "accepted" ? "bg-emerald-100 text-emerald-700" : activeOffer.status === "declined" || activeOffer.status === "expired" ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-700"}`}>{t(offerStatusKey(activeOffer.status))}</span>
               </div>
               {activeOffer.status === "sent" ? <p className="mt-4 text-sm text-slate-500">{t("optimizer.listeningForResponse")}</p> : null}
+              {activeOffer.status === "accepted" || activeOffer.status === "declined" ? (
+                <div aria-live="polite" className={`mt-4 rounded-lg border p-4 text-sm font-semibold ${activeOffer.status === "accepted" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+                  {activeOffer.status === "accepted" ? t("optimizer.msgCustomerAccepted") : t("optimizer.msgCustomerDeclined")}
+                </div>
+              ) : null}
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 <button disabled={activeOffer.status !== "sent" || Boolean(responding)} onClick={() => simulate("accept")} className="primary-button disabled:cursor-not-allowed disabled:opacity-50">
                   {responding === "accept" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
@@ -240,7 +245,7 @@ export default function Optimizer() {
               {activeOffer.public_url ? <a href={activeOffer.public_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"><ExternalLink className="h-4 w-4" />{t("optimizer.openCustomerLink")}</a> : null}
             </section>
           ) : null}
-          {activeOffer ? <ChannelPreview channel={activeOffer.channel} message={activeOffer.message_text} /> : null}
+          {activeOffer ? <ChannelPreview channel={activeOffer.channel} message={activeOffer.message_text} actionUrl={activeOffer.public_url} /> : null}
         </aside>
       </div>
     </div>

@@ -223,6 +223,9 @@ export const uk: typeof en = {
   channelPreview: {
     emailSubject: "Тема: звільнився ранніший час",
     voicePreview: "Попередній перегляд сценарію дзвінка",
+    secureAction: "Переглянути пропозицію",
+    secureLinkHint: "Безпечне посилання · Нічого не зміниться без підтвердження клієнта",
+    voiceLinkPlaceholder: "безпечне посилання для підтвердження, надіслане клієнту",
   },
   errorBoundary: {
     title: "Щось пішло не так під час завантаження",

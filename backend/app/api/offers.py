@@ -97,6 +97,13 @@ async def accept_offer(token: str, session: AsyncSession = Depends(get_session))
 
     await provider.update_booking_time(offer.booking_id, offer.suggested_start, offer.suggested_end)
     offer.status = OfferStatus.accepted.value
+    await MockCommunicationProvider(session).record_customer_reply(
+        offer.channel,
+        offer.customer,
+        "Customer accepted the proposed appointment time.",
+        offer.business_id,
+        offer.id,
+    )
     await session.execute(
         update(RescheduleOffer)
         .where(
@@ -122,6 +129,14 @@ async def decline_offer(token: str, session: AsyncSession = Depends(get_session)
         raise HTTPException(status_code=409, detail="Offer has expired")
 
     offer.status = OfferStatus.declined.value
+    communication = MockCommunicationProvider(session)
+    await communication.record_customer_reply(
+        offer.channel,
+        offer.customer,
+        "Customer declined the proposed appointment time.",
+        offer.business_id,
+        offer.id,
+    )
     acknowledgement = render_offer_message(
         "decline_ack",
         customer_name=offer.customer.name,
@@ -131,7 +146,7 @@ async def decline_offer(token: str, session: AsyncSession = Depends(get_session)
         new_start=offer.suggested_start,
         accept_url="",
     )
-    await MockCommunicationProvider(session).send_message(
+    await communication.send_message(
         offer.channel,
         offer.customer,
         acknowledgement,

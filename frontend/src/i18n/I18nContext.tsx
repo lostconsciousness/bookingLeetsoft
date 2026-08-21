@@ -10,7 +10,7 @@ type DotPaths<T, Prefix extends string = ""> = {
 export type TKey = DotPaths<TranslationShape>;
 
 function detectDefaultLang(): Lang {
-  const stored = typeof window !== "undefined" ? window.localStorage.getItem(STORAGE_KEY) : null;
+  const stored = typeof window !== "undefined" ? window.localStorage?.getItem(STORAGE_KEY) : null;
   if (stored && (LANGUAGES as readonly string[]).includes(stored)) return stored as Lang;
   const browser = typeof navigator !== "undefined" ? navigator.language.slice(0, 2).toLowerCase() : "en";
   if ((LANGUAGES as readonly string[]).includes(browser)) return browser as Lang;
@@ -59,7 +59,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     document.documentElement.lang = lang;
-    window.localStorage.setItem(STORAGE_KEY, lang);
+    window.localStorage?.setItem(STORAGE_KEY, lang);
   }, [lang]);
 
   const value = useMemo<I18nContextValue>(

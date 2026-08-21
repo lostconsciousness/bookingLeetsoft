@@ -12,15 +12,16 @@ export function localDateKey(value: string) {
   return `${year}-${month}-${day}`;
 }
 
-export function findActiveOffer(
+export function findLatestOffer(
   offers: Offer[],
   businessId: number,
   date: string,
   staffId?: number,
 ) {
-  return offers.find(
+  return [...offers]
+    .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
+    .find(
     (offer) =>
-      offer.status === "sent" &&
       offer.business_id === businessId &&
       localDateKey(offer.suggested_start) === date &&
       (!staffId || offer.staff_member_id === staffId),

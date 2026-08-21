@@ -76,6 +76,10 @@ async def test_accept_is_idempotent_and_keeps_original_time_in_public_response(s
     assert second.status == "accepted"
     assert first.current_start == offer.old_start
     assert booking.start_at == offer.suggested_start
+    inbound_count = await session.scalar(
+        select(func.count()).select_from(CommunicationMessage).where(CommunicationMessage.direction == "inbound")
+    )
+    assert inbound_count == 1
 
 
 @pytest.mark.asyncio
@@ -90,7 +94,11 @@ async def test_decline_is_idempotent_and_never_moves_booking(session: AsyncSessi
     assert second.status == "declined"
     assert booking.start_at == original_start
     message_count = await session.scalar(select(func.count()).select_from(CommunicationMessage))
-    assert message_count == 1
+    inbound_count = await session.scalar(
+        select(func.count()).select_from(CommunicationMessage).where(CommunicationMessage.direction == "inbound")
+    )
+    assert message_count == 2
+    assert inbound_count == 1
 
 
 @pytest.mark.asyncio
@@ -184,3 +192,20 @@ async def test_generate_offer_uses_exact_selected_customer_and_time(session: Asy
     assert result.customer_id == customers[2].id
     assert result.suggested_start == datetime(2026, 7, 15, 13, 10)
     assert result.channel == "sms"
+
+    await decline_offer(result.token, session)
+    with pytest.raises(HTTPException) as raised:
+        await generate_offer(
+            GenerateOfferIn(
+                businessId=business.id,
+                date="2026-07-15",
+                staffId=staff.id,
+                bookingId=bookings[2].id,
+                suggestedStart=datetime(2026, 7, 15, 13, 10),
+                channel="email",
+            ),
+            session,
+        )
+
+    assert raised.value.status_code == 409
+    assert "recent offer" in raised.value.detail

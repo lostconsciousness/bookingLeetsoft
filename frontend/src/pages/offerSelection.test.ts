@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Message, Offer } from "../lib/api";
-import { customersFromActivity, findActiveOffer } from "./offerSelection";
+import { customersFromActivity, findLatestOffer } from "./offerSelection";
 
 function offer(overrides: Partial<Offer> = {}): Offer {
   return {
@@ -35,7 +35,7 @@ describe("offer selection", () => {
       offer({ id: 3 }),
     ];
 
-    expect(findActiveOffer(rows, 41, "2026-07-15", 21)?.id).toBe(3);
+    expect(findLatestOffer(rows, 41, "2026-07-15", 21)?.id).toBe(3);
   });
 
   it("restores a cross-day offer on the day of its proposed slot", () => {
@@ -47,7 +47,13 @@ describe("offer selection", () => {
       suggested_end: "2026-07-15T14:00:00+03:00",
     });
 
-    expect(findActiveOffer([row], 41, "2026-07-15", 21)?.id).toBe(4);
+    expect(findLatestOffer([row], 41, "2026-07-15", 21)?.id).toBe(4);
+  });
+
+  it("restores a final customer response after navigation or reload", () => {
+    const row = offer({ id: 5, status: "declined" });
+
+    expect(findLatestOffer([row], 41, "2026-07-15", 21)?.status).toBe("declined");
   });
 
   it("keeps the customer list stable and prioritizes active offers", () => {

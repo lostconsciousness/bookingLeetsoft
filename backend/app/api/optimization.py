@@ -12,7 +12,7 @@ from app.db.session import get_session
 from app.models import Booking, OfferStatus, RescheduleOffer
 from app.providers.communication import MockCommunicationProvider
 from app.schemas import CandidateOut, GapOut, GenerateOfferIn, OfferOut
-from app.services.scheduling import active_offer_booking_ids, compute_candidates, get_business_or_404
+from app.services.scheduling import blocked_offer_booking_ids, compute_candidates, get_business_or_404
 from app.services.templates import render_offer_message
 
 router = APIRouter(prefix="/api")
@@ -54,8 +54,11 @@ def offer_template_key(business_type: str, incentive_type: str) -> str:
 @router.post("/optimization/generate-offer", response_model=OfferOut)
 async def generate_offer(payload: GenerateOfferIn, session: AsyncSession = Depends(get_session)) -> OfferOut:
     business = await get_business_or_404(session, payload.business_id)
-    if payload.booking_id and payload.booking_id in await active_offer_booking_ids(session, payload.business_id):
-        raise HTTPException(status_code=409, detail="An active offer already exists for this booking")
+    if payload.booking_id and payload.booking_id in await blocked_offer_booking_ids(session, payload.business_id):
+        raise HTTPException(
+            status_code=409,
+            detail="This booking already received a recent offer and is temporarily excluded",
+        )
 
     _, candidate_rows, _ = await compute_candidates(session, payload.business_id, payload.date, payload.staff_id)
     if payload.booking_id:

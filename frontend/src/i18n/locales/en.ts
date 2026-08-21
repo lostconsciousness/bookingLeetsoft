@@ -221,6 +221,9 @@ export const en = {
   channelPreview: {
     emailSubject: "Subject: Earlier appointment opening",
     voicePreview: "Voice call script preview",
+    secureAction: "Review appointment offer",
+    secureLinkHint: "Secure link · Nothing changes until the customer confirms",
+    voiceLinkPlaceholder: "the secure confirmation link sent to the customer",
   },
   errorBoundary: {
     title: "Something didn't load correctly",

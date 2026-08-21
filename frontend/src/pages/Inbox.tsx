@@ -164,10 +164,17 @@ export default function Inbox() {
                 </select>
               </label>
               {selectedOffer ? (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
-                  <span className="text-slate-500">{t("inbox.sentVia", { channel: channelLabel(t, selectedOffer.channel) })}</span>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${selectedOffer.status === "accepted" ? "bg-emerald-100 text-emerald-700" : selectedOffer.status === "sent" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"}`}>{t(offerStatusKey(selectedOffer.status))}</span>
-                </div>
+                <>
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+                    <span className="text-slate-500">{t("inbox.sentVia", { channel: channelLabel(t, selectedOffer.channel) })}</span>
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${selectedOffer.status === "accepted" ? "bg-emerald-100 text-emerald-700" : selectedOffer.status === "sent" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"}`}>{t(offerStatusKey(selectedOffer.status))}</span>
+                  </div>
+                  {selectedOffer.status === "accepted" || selectedOffer.status === "declined" ? (
+                    <div aria-live="polite" className={`mt-4 rounded-lg border p-4 text-sm font-semibold ${selectedOffer.status === "accepted" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+                      {selectedOffer.status === "accepted" ? t("inbox.msgCustomerAccepted") : t("inbox.msgCustomerDeclined")}
+                    </div>
+                  ) : null}
+                </>
               ) : null}
             </div>
           ) : null}
@@ -187,7 +194,7 @@ export default function Inbox() {
               ))}
             </div>
           </div>
-          <ChannelPreview channel={channel} message={previewText} />
+          <ChannelPreview channel={channel} message={previewText} actionUrl={selectedOffer?.public_url} />
           <div className="flex flex-wrap gap-2">
             <button disabled={loading || selectedOffer?.status !== "sent" || Boolean(responding)} onClick={() => action("accept")} className="primary-button disabled:cursor-not-allowed disabled:opacity-50">
               {responding === "accept" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{t("inbox.acceptInSimulator")}

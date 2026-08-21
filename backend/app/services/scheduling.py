@@ -96,17 +96,35 @@ async def message_counts(session: AsyncSession, business_id: int) -> dict[int, i
     since = datetime.utcnow() - timedelta(days=14)
     rows = await session.execute(
         select(CommunicationMessage.customer_id, func.count())
-        .where(CommunicationMessage.business_id == business_id, CommunicationMessage.created_at >= since)
+        .where(
+            CommunicationMessage.business_id == business_id,
+            CommunicationMessage.direction == "outbound",
+            CommunicationMessage.created_at >= since,
+        )
         .group_by(CommunicationMessage.customer_id)
     )
     return {customer_id: count for customer_id, count in rows.all()}
 
 
-async def active_offer_booking_ids(session: AsyncSession, business_id: int) -> set[int]:
+async def blocked_offer_booking_ids(
+    session: AsyncSession,
+    business_id: int,
+    days: int = 14,
+) -> set[int]:
+    """Bookings that must not receive another offer during the frequency-cap window."""
+    since = datetime.utcnow() - timedelta(days=days)
     rows = await session.scalars(
         select(RescheduleOffer.booking_id).where(
             RescheduleOffer.business_id == business_id,
-            RescheduleOffer.status.in_([OfferStatus.draft.value, OfferStatus.sent.value]),
+            RescheduleOffer.created_at >= since,
+            RescheduleOffer.status.in_(
+                [
+                    OfferStatus.draft.value,
+                    OfferStatus.sent.value,
+                    OfferStatus.accepted.value,
+                    OfferStatus.declined.value,
+                ]
+            ),
         )
     )
     return set(rows.all())
@@ -139,6 +157,6 @@ async def compute_candidates(
         policy.max_discount_percent,
         candidate_bookings=candidate_windows,
     )
-    active_booking_ids = await active_offer_booking_ids(session, business_id)
-    candidates = [candidate for candidate in candidates if candidate.booking.booking_id not in active_booking_ids]
+    blocked_booking_ids = await blocked_offer_booking_ids(session, business_id)
+    candidates = [candidate for candidate in candidates if candidate.booking.booking_id not in blocked_booking_ids]
     return windows, candidates, [GapOut(**gap.__dict__) for gap in gaps]

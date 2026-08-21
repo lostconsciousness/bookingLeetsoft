@@ -52,7 +52,7 @@ export default function Offers() {
                 <p className="font-semibold text-slate-700">{t("offers.channel")}</p>
                 <p className="text-slate-500">{channelLabel(t, offer.channel)}</p>
               </div>
-              <p className="text-sm leading-6 text-slate-600">{offer.message_text}</p>
+              <p className="break-words text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">{offer.message_text}</p>
               <a href={offer.public_url} target="_blank" rel="noreferrer" className="secondary-button h-10">
                 <ExternalLink className="h-4 w-4" />
                 {t("common.open")}
